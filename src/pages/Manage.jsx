@@ -121,16 +121,23 @@ export default function Manage() {
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [filter, setFilter] = useState('')
+  const [showExcluded, setShowExcluded] = useState(false)
 
   const categories = [...new Set((quizzes || []).map(q => q.category).filter(Boolean))]
-  const filtered = (quizzes || []).filter(q => !filter || q.category === filter)
+
+  const baseFiltered = (quizzes || []).filter(q => !filter || q.category === filter)
+  const active = baseFiltered.filter(q => !q.excluded)
+  const excluded = baseFiltered.filter(q => q.excluded)
+  const filtered = showExcluded ? excluded : active
+
+  const excludedCount = (quizzes || []).filter(q => q.excluded).length
 
   async function handleSave({ question, answer, category }) {
     if (editTarget) {
       await db.quizzes.update(editTarget.id, { question, answer, category })
       setEditTarget(null)
     } else {
-      await db.quizzes.add({ question, answer, category, createdAt: Date.now() })
+      await db.quizzes.add({ question, answer, category, excluded: false, createdAt: Date.now() })
       setShowForm(false)
     }
   }
@@ -139,6 +146,10 @@ export default function Manage() {
     if (!confirm('이 문제를 삭제할까요?')) return
     await db.quizzes.delete(id)
     await db.records.where('quizId').equals(id).delete()
+  }
+
+  async function handleToggleExclude(q) {
+    await db.quizzes.update(q.id, { excluded: !q.excluded })
   }
 
   return (
@@ -154,7 +165,35 @@ export default function Manage() {
         <QuizForm existingCategories={categories} onSave={handleSave} onCancel={() => setShowForm(false)} />
       )}
 
-      {/* Category filter */}
+      {/* 포함/제외 탭 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button
+          onClick={() => setShowExcluded(false)}
+          style={{
+            padding: '6px 16px', borderRadius: 100, border: 'none', cursor: 'pointer',
+            fontSize: 13, fontFamily: 'inherit',
+            background: !showExcluded ? 'var(--accent)' : 'var(--bg3)',
+            color: !showExcluded ? '#0f172a' : 'var(--text2)',
+            fontWeight: !showExcluded ? 600 : 400
+          }}
+        >
+          퀴즈 포함 {active.length}
+        </button>
+        <button
+          onClick={() => setShowExcluded(true)}
+          style={{
+            padding: '6px 16px', borderRadius: 100, border: 'none', cursor: 'pointer',
+            fontSize: 13, fontFamily: 'inherit',
+            background: showExcluded ? 'var(--warning)' : 'var(--bg3)',
+            color: showExcluded ? '#0f172a' : 'var(--text2)',
+            fontWeight: showExcluded ? 600 : 400
+          }}
+        >
+          제외됨 {excludedCount}
+        </button>
+      </div>
+
+      {/* 카테고리 필터 */}
       {categories.length > 0 && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button onClick={() => setFilter('')} style={{ padding: '4px 12px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 13, background: !filter ? 'var(--accent)' : 'var(--bg3)', color: !filter ? '#0f172a' : 'var(--text2)' }}>전체</button>
@@ -166,8 +205,8 @@ export default function Manage() {
 
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">📭</div>
-          <p>문제가 없어요</p>
+          <div className="empty-icon">{showExcluded ? '🚫' : '📭'}</div>
+          <p>{showExcluded ? '제외된 문제가 없어요' : '문제가 없어요'}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -175,9 +214,25 @@ export default function Manage() {
             editTarget?.id === q.id ? (
               <QuizForm key={q.id} initial={q} existingCategories={categories} onSave={handleSave} onCancel={() => setEditTarget(null)} />
             ) : (
-              <div key={q.id} className="card">
-                {q.category && <span className="badge" style={{ marginBottom: 10, display: 'inline-block' }}>{q.category}</span>}
-                <div style={{ fontWeight: 500, marginBottom: 8, lineHeight: 1.6 }}>{q.question}</div>
+              <div key={q.id} className="card" style={{ opacity: q.excluded ? 0.6 : 1, borderColor: q.excluded ? 'rgba(251,191,36,0.2)' : undefined }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: q.category ? 6 : 0 }}>
+                  {q.category
+                    ? <span className="badge">{q.category}</span>
+                    : <span />
+                  }
+                  <button
+                    onClick={() => handleToggleExclude(q)}
+                    style={{
+                      padding: '3px 10px', borderRadius: 100, border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                      background: q.excluded ? 'rgba(110,231,183,0.15)' : 'rgba(251,191,36,0.12)',
+                      color: q.excluded ? 'var(--accent)' : 'var(--warning)',
+                    }}
+                  >
+                    {q.excluded ? '✓ 퀴즈에 포함' : '퀴즈에서 제외'}
+                  </button>
+                </div>
+                <div style={{ fontWeight: 500, marginBottom: 8, lineHeight: 1.6, marginTop: 8 }}>{q.question}</div>
                 <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.6 }}>→ {q.answer}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-secondary" style={{ fontSize: 13, padding: '8px 14px' }} onClick={() => setEditTarget(q)}>수정</button>

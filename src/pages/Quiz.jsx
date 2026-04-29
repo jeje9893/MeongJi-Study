@@ -37,9 +37,10 @@ function QuizSetup({ quizzes, allRecords, onStart }) {
   const [countOption, setCountOption] = useState('10')
   const [customCount, setCustomCount] = useState('')
 
-  const filtered = selectedCategory === '전체'
+  const filtered = (selectedCategory === '전체'
     ? quizzes
     : quizzes.filter(q => q.category === selectedCategory)
+  ).filter(q => !q.excluded)
 
   const recordMap = {}
   allRecords.forEach(r => {
