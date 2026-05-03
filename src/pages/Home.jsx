@@ -45,24 +45,35 @@ export default function Home() {
     ? Math.round((studyRecords.filter(r => r.isCorrect).length / studyRecords.length) * 100)
     : 0
 
-  // 복습 알림: lastReviewedAt 또는 마지막 푼 날짜가 한달 이상 된 문제 수
+  // 복습 알림: History와 동일하게 날짜 카드 단위로 계산
   const monthAgo = getMonthAgo()
   const overdueCount = (() => {
-    if (!records || !quizzes) return 0
-    // 문제별 마지막으로 일반 학습한 날짜
-    const lastStudyDate = {}
+    if (!records) return 0
+
+    // 날짜별 문제 그룹 (일반 학습만)
+    const byDate = {}
     studyRecords.forEach(r => {
-      if (!lastStudyDate[r.quizId] || r.date > lastStudyDate[r.quizId]) {
-        lastStudyDate[r.quizId] = r.date
+      if (!byDate[r.date]) byDate[r.date] = []
+      byDate[r.date].push(r)
+    })
+
+    // quizId별 마지막 복습 날짜
+    const lastReviewDateMap = {}
+    records.filter(r => r.isReview).forEach(r => {
+      if (!lastReviewDateMap[r.quizId] || r.date > lastReviewDateMap[r.quizId]) {
+        lastReviewDateMap[r.quizId] = r.date
       }
     })
-    return quizzes.filter(q => {
-      const lastStudy = lastStudyDate[q.id]
-      if (!lastStudy) return false // 한번도 안 푼 문제는 제외
-      // 복습을 했다면 복습 날짜 기준, 아니면 마지막 학습 날짜 기준
-      const referenceDate = q.lastReviewedAt && q.lastReviewedAt > lastStudy
-        ? q.lastReviewedAt
-        : lastStudy
+
+    // 날짜 카드 단위로 overdue 여부 계산 (History와 동일 로직)
+    return Object.entries(byDate).filter(([date, recs]) => {
+      const quizIds = [...new Set(recs.map(r => r.quizId))]
+      const reviewDates = quizIds.map(id => lastReviewDateMap[id]).filter(Boolean)
+      const allReviewed = reviewDates.length === quizIds.length
+      const latestReviewDate = reviewDates.length > 0
+        ? reviewDates.reduce((a, b) => a > b ? a : b)
+        : null
+      const referenceDate = allReviewed ? latestReviewDate : date
       return referenceDate <= monthAgo
     }).length
   })()
