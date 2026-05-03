@@ -184,6 +184,12 @@ export default function History() {
     setReviewResults(null)
   }
 
+  async function handleDeleteDate(date, recs) {
+    if (!confirm(`${formatDate(date)} 기록을 삭제할까요?`)) return
+    const ids = recs.map(r => r.id)
+    await db.records.bulkDelete(ids)
+  }
+
   function handleReviewDone(results) {
     setReviewResults(results)
     setReviewSession(null)
@@ -299,13 +305,22 @@ export default function History() {
                 <div style={{ height: '100%', width: `${pct}%`, background: pct >= 70 ? 'var(--accent)' : 'var(--warning)', borderRadius: 2 }} />
               </div>
 
-              <button
-                className="btn btn-secondary"
-                style={{ fontSize: 13, padding: '8px 14px', width: '100%', color: isOverdue ? 'var(--danger)' : undefined }}
-                onClick={() => handleStartReview(date, recs)}
-              >
-                {isOverdue ? '🔴 복습하기' : '🔁 다시 풀기'}
-              </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 13, padding: '8px 14px', color: isOverdue ? 'var(--danger)' : undefined }}
+                  onClick={() => handleStartReview(date, recs)}
+                >
+                  {isOverdue ? '🔴 복습하기' : '🔁 다시 풀기'}
+                </button>
+                <button
+                  className="btn btn-danger"
+                  style={{ fontSize: 13, padding: '8px 14px' }}
+                  onClick={() => handleDeleteDate(date, recs)}
+                >
+                  🗑
+                </button>
+              </div>
             </div>
           )
         })}
