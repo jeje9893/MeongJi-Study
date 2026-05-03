@@ -1,14 +1,21 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
+
+function getDateMonthAgo() {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 1)
+  return d.toISOString().slice(0, 10)
+}
 
 // 안 풀어본 문제 우선, 틀린 문제 다음, 맞은 문제 마지막으로 가중치 부여 후 선택
 function weightedSelect(pool, recordMap, count) {
   const weighted = pool.map(q => {
     const history = recordMap[q.id] || []
-    if (history.length === 0) return { q, weight: 5 }        // 안 풀어본 문제
+    if (history.length === 0) return { q, weight: 5 }
     const lastCorrect = history[history.length - 1].isCorrect
-    if (!lastCorrect) return { q, weight: 3 }                 // 마지막에 틀린 문제
+    if (!lastCorrect) return { q, weight: 3 }
     const correctRate = history.filter(r => r.isCorrect).length / history.length
     return { q, weight: Math.max(1, Math.round((1 - correctRate) * 4 + 1)) }
   })
@@ -67,7 +74,6 @@ function QuizSetup({ quizzes, allRecords, onStart }) {
     <div>
       <h1 className="page-title">퀴즈 설정</h1>
 
-      {/* 카테고리 선택 */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, fontWeight: 600 }}>카테고리</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -93,7 +99,6 @@ function QuizSetup({ quizzes, allRecords, onStart }) {
         </div>
       </div>
 
-      {/* 문제 수 선택 */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 12, fontWeight: 600 }}>문제 수</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: countOption === 'custom' ? 12 : 0 }}>
@@ -144,6 +149,24 @@ function QuizSetup({ quizzes, allRecords, onStart }) {
   )
 }
 
+// 복습 모드 시작 화면
+function QuizReviewStart({ reviewQuizzes, onStart, onCancel }) {
+  return (
+    <div>
+      <h1 className="page-title">복습 퀴즈 🔔</h1>
+      <div className="card" style={{ marginBottom: 24, background: 'linear-gradient(135deg, #1e1b4b, #1e293b)', border: '1px solid rgba(167,139,250,0.3)' }}>
+        <div style={{ fontSize: 14, color: '#c4b5fd', fontWeight: 600, marginBottom: 8 }}>한달 이상 안 푼 문제</div>
+        <div style={{ fontSize: 28, fontFamily: 'Space Mono', fontWeight: 700, color: '#c4b5fd' }}>{reviewQuizzes.length}개</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 8 }}>전체 복습 문제를 순서대로 풀게 됩니다</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <button className="btn btn-secondary" onClick={onCancel}>일반 퀴즈로</button>
+        <button className="btn btn-primary" onClick={() => onStart(reviewQuizzes)}>복습 시작 🚀</button>
+      </div>
+    </div>
+  )
+}
+
 // 결과 화면
 function QuizResult({ results, onRetry, onSetup }) {
   const correct = results.filter(r => r.isCorrect).length
@@ -175,6 +198,9 @@ function QuizResult({ results, onRetry, onSetup }) {
 }
 
 export default function Quiz() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const isReviewMode = searchParams.get('mode') === 'review'
+
   const quizzes = useLiveQuery(() => db.quizzes.toArray(), [])
   const allRecords = useLiveQuery(() => db.records.toArray(), [])
 
@@ -183,8 +209,16 @@ export default function Quiz() {
   const [idx, setIdx] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [results, setResults] = useState([])
+  // isReviewMode가 바뀌면 phase를 setup으로 리셋 (배너 재클릭 등 대응)
+  const [lastReviewMode, setLastReviewMode] = useState(isReviewMode)
+  if (isReviewMode !== lastReviewMode) {
+    setLastReviewMode(isReviewMode)
+    setPhase('setup')
+  }
 
-  if (!quizzes || !allRecords) return <div style={{ color: 'var(--text2)', textAlign: 'center', paddingTop: 60 }}>로딩 중...</div>
+  if (!quizzes || !allRecords) return (
+    <div style={{ color: 'var(--text2)', textAlign: 'center', paddingTop: 60 }}>로딩 중...</div>
+  )
 
   if (quizzes.length === 0) return (
     <div className="empty-state">
@@ -192,6 +226,24 @@ export default function Quiz() {
       <p>문제가 없어요. 먼저 문제를 추가해주세요!</p>
     </div>
   )
+
+  // 복습 대상 문제 계산 (렌더 시점, useEffect 없음)
+  const reviewQuizzes = (() => {
+    if (!isReviewMode) return []
+    const monthAgo = getDateMonthAgo()
+    const lastDateMap = {}
+    allRecords.forEach(r => {
+      if (!lastDateMap[r.quizId] || r.date > lastDateMap[r.quizId]) {
+        lastDateMap[r.quizId] = r.date
+      }
+    })
+    const reviewIds = new Set(
+      Object.entries(lastDateMap)
+        .filter(([, date]) => date <= monthAgo)
+        .map(([id]) => parseInt(id))
+    )
+    return quizzes.filter(q => !q.excluded && reviewIds.has(q.id))
+  })()
 
   function handleStart(selected) {
     setSessionQuizzes(selected)
@@ -208,6 +260,11 @@ export default function Quiz() {
     setPhase('playing')
   }
 
+  function handleGoToSetup() {
+    setSearchParams({})
+    setPhase('setup')
+  }
+
   async function handleAnswer(isCorrect) {
     const current = sessionQuizzes[idx]
     const today = new Date().toISOString().slice(0, 10)
@@ -222,13 +279,26 @@ export default function Quiz() {
     }
   }
 
-  if (phase === 'setup') return <QuizSetup quizzes={quizzes} allRecords={allRecords} onStart={handleStart} />
+  // 복습 모드 + setup 단계 → 복습 시작 화면
+  if (phase === 'setup' && isReviewMode && reviewQuizzes.length > 0) {
+    return (
+      <QuizReviewStart
+        reviewQuizzes={reviewQuizzes}
+        onStart={handleStart}
+        onCancel={handleGoToSetup}
+      />
+    )
+  }
+
+  if (phase === 'setup') return (
+    <QuizSetup quizzes={quizzes} allRecords={allRecords} onStart={handleStart} />
+  )
 
   if (phase === 'done') return (
     <QuizResult
       results={results}
       onRetry={handleRetry}
-      onSetup={() => setPhase('setup')}
+      onSetup={handleGoToSetup}
     />
   )
 
@@ -236,7 +306,7 @@ export default function Quiz() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <button onClick={() => setPhase('setup')} style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', fontSize: 14, padding: 0 }}>← 설정으로</button>
+        <button onClick={handleGoToSetup} style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', fontSize: 14, padding: 0 }}>← 설정으로</button>
         <span className="badge">{idx + 1} / {sessionQuizzes.length}</span>
       </div>
 
@@ -251,7 +321,6 @@ export default function Quiz() {
       )}
 
       <div className="card" style={{ marginBottom: 20, minHeight: 140, display: 'flex', alignItems: 'center' }}>
-        {/* 문제도 줄바꿈 적용 */}
         <p style={{ fontSize: 18, lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{current.question}</p>
       </div>
 
@@ -261,7 +330,6 @@ export default function Quiz() {
         <div>
           <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(110,231,183,0.3)', background: 'rgba(110,231,183,0.05)' }}>
             <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 8, fontWeight: 600 }}>정답</div>
-            {/* 줄바꿈 적용 */}
             <p style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{current.answer}</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

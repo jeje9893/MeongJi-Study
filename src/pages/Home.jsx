@@ -4,7 +4,9 @@ import { db } from '../db'
 
 function getStreak(records) {
   if (!records.length) return 0
-  const dates = [...new Set(records.map(r => r.date))].sort().reverse()
+  const studyRecords = records.filter(r => !r.isReview)
+  const dates = [...new Set(studyRecords.map(r => r.date))].sort().reverse()
+  if (!dates.length) return 0
   const today = new Date().toISOString().slice(0, 10)
   if (dates[0] !== today && dates[0] !== getPrevDate(today)) return 0
   let streak = 1
@@ -21,8 +23,7 @@ function getPrevDate(dateStr) {
   return d.toISOString().slice(0, 10)
 }
 
-// 한달 전 날짜 구하기
-function getDateMonthAgo() {
+function getMonthAgo() {
   const d = new Date()
   d.setMonth(d.getMonth() - 1)
   return d.toISOString().slice(0, 10)
@@ -34,33 +35,37 @@ export default function Home() {
   const records = useLiveQuery(() => db.records.toArray(), [])
 
   const today = new Date().toISOString().slice(0, 10)
-  const todayRecords = records?.filter(r => r.date === today) || []
+  const studyRecords = records?.filter(r => !r.isReview) || []
+  const todayRecords = studyRecords.filter(r => r.date === today)
   const completedToday = todayRecords.length > 0
   const streak = getStreak(records || [])
 
   const totalQuizzes = quizzes?.length || 0
-  const correctRate = records?.length
-    ? Math.round((records.filter(r => r.isCorrect).length / records.length) * 100)
+  const correctRate = studyRecords.length
+    ? Math.round((studyRecords.filter(r => r.isCorrect).length / studyRecords.length) * 100)
     : 0
 
-  // 복습 알림: 한달 전 이전에 마지막으로 푼 문제들
-  const monthAgo = getDateMonthAgo()
-  const reviewQuizIds = (() => {
-    if (!records || !quizzes) return []
-    // 각 문제별 마지막으로 푼 날짜
-    const lastDateMap = {}
-    records.forEach(r => {
-      if (!lastDateMap[r.quizId] || r.date > lastDateMap[r.quizId]) {
-        lastDateMap[r.quizId] = r.date
+  // 복습 알림: lastReviewedAt 또는 마지막 푼 날짜가 한달 이상 된 문제 수
+  const monthAgo = getMonthAgo()
+  const overdueCount = (() => {
+    if (!records || !quizzes) return 0
+    // 문제별 마지막으로 일반 학습한 날짜
+    const lastStudyDate = {}
+    studyRecords.forEach(r => {
+      if (!lastStudyDate[r.quizId] || r.date > lastStudyDate[r.quizId]) {
+        lastStudyDate[r.quizId] = r.date
       }
     })
-    // 한달 전 이전에 마지막으로 푼 문제
-    return Object.entries(lastDateMap)
-      .filter(([, date]) => date <= monthAgo)
-      .map(([id]) => parseInt(id))
+    return quizzes.filter(q => {
+      const lastStudy = lastStudyDate[q.id]
+      if (!lastStudy) return false // 한번도 안 푼 문제는 제외
+      // 복습을 했다면 복습 날짜 기준, 아니면 마지막 학습 날짜 기준
+      const referenceDate = q.lastReviewedAt && q.lastReviewedAt > lastStudy
+        ? q.lastReviewedAt
+        : lastStudy
+      return referenceDate <= monthAgo
+    }).length
   })()
-
-  const reviewCount = reviewQuizIds.length
 
   return (
     <div>
@@ -72,28 +77,28 @@ export default function Home() {
       </div>
 
       {/* 복습 알림 배너 */}
-      {reviewCount > 0 && (
+      {overdueCount > 0 && (
         <div
           className="card"
           style={{
             marginBottom: 16,
-            background: 'linear-gradient(135deg, #1e1b4b, #1e293b)',
-            border: '1px solid rgba(167,139,250,0.3)',
+            background: 'linear-gradient(135deg, #3b0f0f, #1e293b)',
+            border: '1px solid rgba(248,113,113,0.35)',
             cursor: 'pointer'
           }}
-          onClick={() => navigate('/quiz')}
+          onClick={() => navigate('/history')}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ fontSize: 32 }}>🔔</div>
+            <div style={{ fontSize: 32 }}>🔴</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, color: '#c4b5fd', marginBottom: 3 }}>
+              <div style={{ fontWeight: 600, color: '#fca5a5', marginBottom: 3 }}>
                 복습할 문제가 있어요!
               </div>
               <div style={{ fontSize: 13, color: 'var(--text2)' }}>
-                한달 이상 안 푼 문제 <b style={{ color: '#c4b5fd' }}>{reviewCount}개</b> — 퀴즈에서 만나요
+                한달 이상 안 푼 문제 <b style={{ color: '#fca5a5' }}>{overdueCount}개</b> — 복습 탭에서 확인하세요
               </div>
             </div>
-            <div style={{ fontSize: 18, color: '#c4b5fd' }}>→</div>
+            <div style={{ fontSize: 18, color: '#fca5a5' }}>→</div>
           </div>
         </div>
       )}

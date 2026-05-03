@@ -17,13 +17,23 @@ db.version(2).stores({
   })
 })
 
-// 버전 3: reviewDate 필드 추가 (한달 뒤 복습 알림용)
+// 버전 3: reviewDate 필드 추가
 db.version(3).stores({
   quizzes: '++id, category, createdAt, excluded',
   records: '++id, quizId, date, isCorrect, reviewDate'
 }).upgrade(tx => {
   return tx.table('records').toCollection().modify(r => {
     if (!r.reviewDate) r.reviewDate = null
+  })
+})
+
+// 버전 4: quizzes에 lastReviewedAt 추가 (복습 탭 날짜 추적용)
+db.version(4).stores({
+  quizzes: '++id, category, createdAt, excluded, lastReviewedAt',
+  records: '++id, quizId, date, isCorrect, reviewDate'
+}).upgrade(tx => {
+  return tx.table('quizzes').toCollection().modify(q => {
+    if (!q.lastReviewedAt) q.lastReviewedAt = null
   })
 })
 
@@ -56,12 +66,10 @@ export async function importData(file) {
 
   const existingQuizzes = await db.quizzes.toArray()
 
-  // question+answer 기준으로 중복 체크
   const existingSet = new Set(
     existingQuizzes.map(q => `${q.question}||${q.answer}`)
   )
 
-  // 기존 id → 새 id 매핑 (records 연결용)
   const idMap = {}
   let addedCount = 0
   let skippedCount = 0
@@ -69,20 +77,23 @@ export async function importData(file) {
   for (const q of payload.quizzes) {
     const key = `${q.question}||${q.answer}`
     if (existingSet.has(key)) {
-      // 중복 문제: 기존 id 찾아서 매핑
       const existing = existingQuizzes.find(e => `${e.question}||${e.answer}` === key)
       if (existing) idMap[q.id] = existing.id
       skippedCount++
     } else {
       const { id: oldId, ...rest } = q
-      const newId = await db.quizzes.add({ ...rest, excluded: rest.excluded ?? false, createdAt: rest.createdAt ?? Date.now() })
+      const newId = await db.quizzes.add({
+        ...rest,
+        excluded: rest.excluded ?? false,
+        createdAt: rest.createdAt ?? Date.now(),
+        lastReviewedAt: rest.lastReviewedAt ?? null
+      })
       idMap[oldId] = newId
       existingSet.add(key)
       addedCount++
     }
   }
 
-  // records 가져오기 (quizId를 새 id로 매핑)
   let recordsAdded = 0
   if (payload.records && Array.isArray(payload.records)) {
     const existingRecords = await db.records.toArray()
