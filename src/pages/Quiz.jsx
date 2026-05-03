@@ -164,8 +164,8 @@ function QuizResult({ results, onRetry, onSetup }) {
           <div key={i} className="card" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', borderLeft: `3px solid ${r.isCorrect ? 'var(--accent)' : 'var(--danger)'}` }}>
             <span style={{ fontSize: 18 }}>{r.isCorrect ? '✅' : '❌'}</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, marginBottom: 4 }}>{r.quiz.question}</div>
-              <div style={{ fontSize: 13, color: 'var(--text2)' }}>정답: {r.quiz.answer}</div>
+              <div style={{ fontSize: 14, marginBottom: 4, whiteSpace: 'pre-wrap' }}>{r.quiz.question}</div>
+              <div style={{ fontSize: 13, color: 'var(--text2)', whiteSpace: 'pre-wrap' }}>정답: {r.quiz.answer}</div>
             </div>
           </div>
         ))}
@@ -251,7 +251,8 @@ export default function Quiz() {
       )}
 
       <div className="card" style={{ marginBottom: 20, minHeight: 140, display: 'flex', alignItems: 'center' }}>
-        <p style={{ fontSize: 18, lineHeight: 1.7, fontWeight: 500 }}>{current.question}</p>
+        {/* 문제도 줄바꿈 적용 */}
+        <p style={{ fontSize: 18, lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{current.question}</p>
       </div>
 
       {!revealed ? (
@@ -260,7 +261,8 @@ export default function Quiz() {
         <div>
           <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(110,231,183,0.3)', background: 'rgba(110,231,183,0.05)' }}>
             <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 8, fontWeight: 600 }}>정답</div>
-            <p style={{ fontSize: 17, lineHeight: 1.7 }}>{current.answer}</p>
+            {/* 줄바꿈 적용 */}
+            <p style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{current.answer}</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <button className="btn" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--danger)' }} onClick={() => handleAnswer(false)}>❌ 틀렸어</button>

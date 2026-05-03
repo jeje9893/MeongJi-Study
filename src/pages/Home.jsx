@@ -21,6 +21,13 @@ function getPrevDate(dateStr) {
   return d.toISOString().slice(0, 10)
 }
 
+// 한달 전 날짜 구하기
+function getDateMonthAgo() {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export default function Home() {
   const navigate = useNavigate()
   const quizzes = useLiveQuery(() => db.quizzes.toArray(), [])
@@ -36,6 +43,25 @@ export default function Home() {
     ? Math.round((records.filter(r => r.isCorrect).length / records.length) * 100)
     : 0
 
+  // 복습 알림: 한달 전 이전에 마지막으로 푼 문제들
+  const monthAgo = getDateMonthAgo()
+  const reviewQuizIds = (() => {
+    if (!records || !quizzes) return []
+    // 각 문제별 마지막으로 푼 날짜
+    const lastDateMap = {}
+    records.forEach(r => {
+      if (!lastDateMap[r.quizId] || r.date > lastDateMap[r.quizId]) {
+        lastDateMap[r.quizId] = r.date
+      }
+    })
+    // 한달 전 이전에 마지막으로 푼 문제
+    return Object.entries(lastDateMap)
+      .filter(([, date]) => date <= monthAgo)
+      .map(([id]) => parseInt(id))
+  })()
+
+  const reviewCount = reviewQuizIds.length
+
   return (
     <div>
       <div style={{ marginBottom: 28 }}>
@@ -44,6 +70,33 @@ export default function Home() {
         </p>
         <h1 className="page-title">나만의 퀴즈 📚</h1>
       </div>
+
+      {/* 복습 알림 배너 */}
+      {reviewCount > 0 && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            background: 'linear-gradient(135deg, #1e1b4b, #1e293b)',
+            border: '1px solid rgba(167,139,250,0.3)',
+            cursor: 'pointer'
+          }}
+          onClick={() => navigate('/quiz')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ fontSize: 32 }}>🔔</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, color: '#c4b5fd', marginBottom: 3 }}>
+                복습할 문제가 있어요!
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text2)' }}>
+                한달 이상 안 푼 문제 <b style={{ color: '#c4b5fd' }}>{reviewCount}개</b> — 퀴즈에서 만나요
+              </div>
+            </div>
+            <div style={{ fontSize: 18, color: '#c4b5fd' }}>→</div>
+          </div>
+        </div>
+      )}
 
       {/* Streak */}
       <div className="card" style={{ marginBottom: 16, background: streak > 0 ? 'linear-gradient(135deg, #064e3b, #1e293b)' : 'var(--bg2)', border: streak > 0 ? '1px solid rgba(110,231,183,0.2)' : undefined }}>

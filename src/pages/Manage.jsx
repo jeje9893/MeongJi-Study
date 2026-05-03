@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db'
+import { db, exportData, importData } from '../db'
 
 function CategoryInput({ value, onChange, existingCategories }) {
   const [mode, setMode] = useState(() =>
@@ -76,10 +76,12 @@ function CategoryInput({ value, onChange, existingCategories }) {
   )
 }
 
-function QuizForm({ initial, onSave, onCancel, existingCategories }) {
+// lastCategory: 직전 문제에서 쓴 카테고리를 이어받아 초기값으로 사용
+function QuizForm({ initial, onSave, onCancel, existingCategories, lastCategory }) {
   const [question, setQuestion] = useState(initial?.question || '')
   const [answer, setAnswer] = useState(initial?.answer || '')
-  const [category, setCategory] = useState(initial?.category || '')
+  // 수정 시엔 해당 문제의 카테고리, 새 문제 추가 시엔 lastCategory 이어받기
+  const [category, setCategory] = useState(initial?.category ?? lastCategory ?? '')
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -122,6 +124,13 @@ export default function Manage() {
   const [editTarget, setEditTarget] = useState(null)
   const [filter, setFilter] = useState('')
   const [showExcluded, setShowExcluded] = useState(false)
+  // 직전에 저장한 카테고리 기억
+  const [lastCategory, setLastCategory] = useState('')
+  // import/export 상태
+  const [importMsg, setImportMsg] = useState(null)
+  const [importing, setImporting] = useState(false)
+  const [showDataPanel, setShowDataPanel] = useState(false)
+  const fileInputRef = useRef()
 
   const categories = [...new Set((quizzes || []).map(q => q.category).filter(Boolean))]
 
@@ -138,6 +147,8 @@ export default function Manage() {
       setEditTarget(null)
     } else {
       await db.quizzes.add({ question, answer, category, excluded: false, createdAt: Date.now() })
+      // 저장 후 카테고리 기억, 폼은 열린 채로 유지해서 연속 입력 가능
+      setLastCategory(category)
       setShowForm(false)
     }
   }
@@ -152,17 +163,103 @@ export default function Manage() {
     await db.quizzes.update(q.id, { excluded: !q.excluded })
   }
 
+  async function handleExport() {
+    try {
+      await exportData()
+    } catch (e) {
+      alert('내보내기 실패: ' + e.message)
+    }
+  }
+
+  async function handleImport(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setImportMsg(null)
+    try {
+      const result = await importData(file)
+      setImportMsg({
+        type: 'success',
+        text: `완료! 새 문제 ${result.addedCount}개 추가, 중복 ${result.skippedCount}개 건너뜀, 기록 ${result.recordsAdded}개 추가`
+      })
+    } catch (e) {
+      setImportMsg({ type: 'error', text: '가져오기 실패: ' + e.message })
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
+  }
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>문제 관리</h1>
-        <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', fontSize: 14 }} onClick={() => { setShowForm(true); setEditTarget(null) }}>
-          + 추가
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-secondary"
+            style={{ width: 'auto', padding: '8px 14px', fontSize: 13 }}
+            onClick={() => setShowDataPanel(v => !v)}
+          >
+            {showDataPanel ? '닫기' : '📤 데이터'}
+          </button>
+          <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px', fontSize: 14 }} onClick={() => { setShowForm(true); setEditTarget(null) }}>
+            + 추가
+          </button>
+        </div>
       </div>
 
+      {/* 데이터 내보내기/가져오기 패널 */}
+      {showDataPanel && (
+        <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(110,231,183,0.2)' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>데이터 전송</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
+            JSON 파일로 내보내고 다른 기기에서 가져올 수 있어요.<br />
+            가져오기는 기존 데이터에 병합되며 중복 문제는 건너뜁니다.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <button
+              className="btn btn-secondary"
+              onClick={handleExport}
+              style={{ fontSize: 14 }}
+            >
+              📥 내보내기
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              style={{ fontSize: 14, opacity: importing ? 0.6 : 1 }}
+            >
+              {importing ? '가져오는 중...' : '📤 가져오기'}
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImport}
+            style={{ display: 'none' }}
+          />
+          {importMsg && (
+            <div style={{
+              marginTop: 12, padding: '10px 14px', borderRadius: 8, fontSize: 13,
+              background: importMsg.type === 'success' ? 'rgba(110,231,183,0.1)' : 'rgba(248,113,113,0.1)',
+              color: importMsg.type === 'success' ? 'var(--accent)' : 'var(--danger)',
+              border: `1px solid ${importMsg.type === 'success' ? 'rgba(110,231,183,0.2)' : 'rgba(248,113,113,0.2)'}`
+            }}>
+              {importMsg.text}
+            </div>
+          )}
+        </div>
+      )}
+
       {(showForm && !editTarget) && (
-        <QuizForm existingCategories={categories} onSave={handleSave} onCancel={() => setShowForm(false)} />
+        <QuizForm
+          existingCategories={categories}
+          onSave={handleSave}
+          onCancel={() => setShowForm(false)}
+          lastCategory={lastCategory}
+        />
       )}
 
       {/* 포함/제외 탭 */}
@@ -212,7 +309,7 @@ export default function Manage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {filtered.map(q => (
             editTarget?.id === q.id ? (
-              <QuizForm key={q.id} initial={q} existingCategories={categories} onSave={handleSave} onCancel={() => setEditTarget(null)} />
+              <QuizForm key={q.id} initial={q} existingCategories={categories} onSave={handleSave} onCancel={() => setEditTarget(null)} lastCategory={lastCategory} />
             ) : (
               <div key={q.id} className="card" style={{ opacity: q.excluded ? 0.6 : 1, borderColor: q.excluded ? 'rgba(251,191,36,0.2)' : undefined }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: q.category ? 6 : 0 }}>
