@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
+import { renderWithHighlights, mergeHighlights, getSelectionOffsets } from '../highlightUtils.jsx'
 
 function getDateMonthAgo() {
   const d = new Date()
@@ -199,7 +200,7 @@ function QuizResult({ results, onRetry, onSetup }) {
             <span style={{ fontSize: 18 }}>{r.isCorrect ? '✅' : '❌'}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, marginBottom: 4, whiteSpace: 'pre-wrap' }}>{r.quiz.question}</div>
-              <div style={{ fontSize: 13, color: 'var(--text2)', whiteSpace: 'pre-wrap' }}>정답: {r.quiz.answer}</div>
+              <div style={{ fontSize: 13, color: 'var(--text2)', whiteSpace: 'pre-wrap' }}>정답: {renderWithHighlights(r.quiz.answer, r.quiz.answerHighlights)}</div>
             </div>
           </div>
         ))}
@@ -220,6 +221,9 @@ export default function Quiz() {
   const [idx, setIdx] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [results, setResults] = useState([])
+  const [highlightMode, setHighlightMode] = useState(false)
+  const [quizHighlights, setQuizHighlights] = useState([])
+  const answerRef = useRef()
   // isReviewMode가 바뀌면 phase를 setup으로 리셋 (배너 재클릭 등 대응)
   const [lastReviewMode, setLastReviewMode] = useState(isReviewMode)
   if (isReviewMode !== lastReviewMode) {
@@ -276,18 +280,43 @@ export default function Quiz() {
     setPhase('setup')
   }
 
-  async function handleAnswer(isCorrect) {
-    const current = sessionQuizzes[idx]
-    const today = new Date().toISOString().slice(0, 10)
-    await db.records.add({ quizId: current.id, date: today, isCorrect })
-    const newResults = [...results, { quiz: current, isCorrect }]
-    setResults(newResults)
+  function advanceQuiz() {
+    setHighlightMode(false)
     if (idx + 1 >= sessionQuizzes.length) {
       setPhase('done')
     } else {
       setIdx(idx + 1)
       setRevealed(false)
     }
+  }
+
+  async function handleAnswer(isCorrect) {
+    const current = sessionQuizzes[idx]
+    const today = new Date().toISOString().slice(0, 10)
+    await db.records.add({ quizId: current.id, date: today, isCorrect })
+    setResults(prev => [...prev, { quiz: current, isCorrect }])
+    if (!isCorrect) {
+      setQuizHighlights(current.answerHighlights || [])
+      setHighlightMode(true)
+      return
+    }
+    advanceQuiz()
+  }
+
+  function handleAddHighlightFromSelection() {
+    const offset = getSelectionOffsets(answerRef.current)
+    if (!offset) return
+    setQuizHighlights(prev => mergeHighlights([...prev, offset]))
+    window.getSelection()?.removeAllRanges()
+  }
+
+  async function handleHighlightDone() {
+    const current = sessionQuizzes[idx]
+    await db.quizzes.update(current.id, { answerHighlights: quizHighlights })
+    setSessionQuizzes(prev =>
+      prev.map(q => q.id === current.id ? { ...q, answerHighlights: quizHighlights } : q)
+    )
+    advanceQuiz()
   }
 
   // 복습 모드 + setup 단계 → 복습 시작 화면
@@ -337,15 +366,56 @@ export default function Quiz() {
 
       {!revealed ? (
         <button className="btn btn-secondary" onClick={() => setRevealed(true)}>정답 보기 👀</button>
-      ) : (
+      ) : !highlightMode ? (
         <div>
           <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(110,231,183,0.3)', background: 'rgba(110,231,183,0.05)' }}>
             <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 8, fontWeight: 600 }}>정답</div>
-            <p style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{current.answer}</p>
+            <p style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              {renderWithHighlights(current.answer, current.answerHighlights)}
+            </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <button className="btn" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--danger)' }} onClick={() => handleAnswer(false)}>❌ 틀렸어</button>
             <button className="btn" style={{ background: 'rgba(110,231,183,0.15)', color: 'var(--accent)' }} onClick={() => handleAnswer(true)}>✅ 맞았어</button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--warning)', marginBottom: 10, fontWeight: 500 }}>
+            🖊 중요한 부분을 선택하고 형광펜을 추가하세요
+          </div>
+          <div className="card" style={{ marginBottom: 12, borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.04)' }}>
+            <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 8, fontWeight: 600 }}>정답</div>
+            <p
+              ref={answerRef}
+              style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap', userSelect: 'text', cursor: 'text' }}
+            >
+              {renderWithHighlights(current.answer, quizHighlights)}
+            </p>
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ marginBottom: 10, background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', border: '1px solid rgba(251,191,36,0.3)' }}
+            onClick={handleAddHighlightFromSelection}
+          >
+            🖊 선택 구간 형광펜 추가
+          </button>
+          {quizHighlights.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+              {quizHighlights.map((h, i) => (
+                <span
+                  key={i}
+                  onClick={() => setQuizHighlights(prev => prev.filter((_, j) => j !== i))}
+                  style={{ fontSize: 12, padding: '2px 10px', borderRadius: 100, cursor: 'pointer', background: 'rgba(251,191,36,0.2)', color: 'var(--warning)' }}
+                >
+                  {current.answer.slice(h.start, h.end).slice(0, 15)}{current.answer.slice(h.start, h.end).length > 15 ? '…' : ''} ×
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <button className="btn btn-secondary" onClick={advanceQuiz}>건너뛰기</button>
+            <button className="btn btn-primary" onClick={handleHighlightDone}>저장 후 다음 →</button>
           </div>
         </div>
       )}

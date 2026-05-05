@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, exportData, importData } from '../db'
+import { renderWithHighlights, mergeHighlights } from '../highlightUtils.jsx'
 
 function CategoryInput({ value, onChange, existingCategories }) {
   const [mode, setMode] = useState(() =>
@@ -80,13 +81,34 @@ function CategoryInput({ value, onChange, existingCategories }) {
 function QuizForm({ initial, onSave, onCancel, existingCategories, lastCategory }) {
   const [question, setQuestion] = useState(initial?.question || '')
   const [answer, setAnswer] = useState(initial?.answer || '')
-  // 수정 시엔 해당 문제의 카테고리, 새 문제 추가 시엔 lastCategory 이어받기
   const [category, setCategory] = useState(initial?.category ?? lastCategory ?? '')
+  const [highlights, setHighlights] = useState(initial?.answerHighlights || [])
+  const [pendingSelection, setPendingSelection] = useState(null)
+  const answerRef = useRef()
+
+  function handleAnswerChange(e) {
+    setAnswer(e.target.value)
+    setHighlights([])
+    setPendingSelection(null)
+  }
+
+  function handleAnswerSelect() {
+    const el = answerRef.current
+    if (!el) return
+    const { selectionStart: s, selectionEnd: e } = el
+    setPendingSelection(s !== e ? { start: s, end: e } : null)
+  }
+
+  function handleAddHighlight() {
+    if (!pendingSelection) return
+    setHighlights(prev => mergeHighlights([...prev, pendingSelection]))
+    setPendingSelection(null)
+  }
 
   function handleSubmit(e) {
     e.preventDefault()
     if (!question.trim() || !answer.trim()) return
-    onSave({ question: question.trim(), answer: answer.trim(), category: category.trim() })
+    onSave({ question: question.trim(), answer: answer.trim(), category: category.trim(), answerHighlights: highlights })
   }
 
   return (
@@ -99,7 +121,48 @@ function QuizForm({ initial, onSave, onCancel, existingCategories, lastCategory 
         </div>
         <div className="form-group">
           <label>정답 *</label>
-          <textarea className="input" placeholder="정답을 입력하세요" value={answer} onChange={e => setAnswer(e.target.value)} />
+          <textarea
+            ref={answerRef}
+            className="input"
+            placeholder="정답을 입력하세요"
+            value={answer}
+            onChange={handleAnswerChange}
+            onMouseUp={handleAnswerSelect}
+            onKeyUp={handleAnswerSelect}
+          />
+          <button
+            type="button"
+            onClick={handleAddHighlight}
+            disabled={!pendingSelection}
+            style={{
+              marginTop: 6, padding: '4px 12px', borderRadius: 100,
+              border: `1px solid ${pendingSelection ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.08)'}`,
+              background: pendingSelection ? 'rgba(251,191,36,0.15)' : 'transparent',
+              color: pendingSelection ? 'var(--warning)' : 'var(--text2)',
+              fontSize: 12, cursor: pendingSelection ? 'pointer' : 'default', fontFamily: 'inherit',
+            }}
+          >
+            🖊 형광펜 적용
+          </button>
+          {highlights.length > 0 && (
+            <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg3)', borderRadius: 8 }}>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6 }}>미리보기 (chip 클릭 시 제거)</div>
+              <p style={{ fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: '0 0 8px' }}>
+                {renderWithHighlights(answer, highlights)}
+              </p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {highlights.map((h, i) => (
+                  <span
+                    key={i}
+                    onClick={() => setHighlights(prev => prev.filter((_, j) => j !== i))}
+                    style={{ fontSize: 12, padding: '2px 10px', borderRadius: 100, cursor: 'pointer', background: 'rgba(251,191,36,0.2)', color: 'var(--warning)' }}
+                  >
+                    {answer.slice(h.start, h.end).slice(0, 15)}{answer.slice(h.start, h.end).length > 15 ? '…' : ''} ×
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="form-group">
           <label>카테고리 (선택)</label>
@@ -141,13 +204,12 @@ export default function Manage() {
 
   const excludedCount = (quizzes || []).filter(q => q.excluded).length
 
-  async function handleSave({ question, answer, category }) {
+  async function handleSave({ question, answer, category, answerHighlights }) {
     if (editTarget) {
-      await db.quizzes.update(editTarget.id, { question, answer, category })
+      await db.quizzes.update(editTarget.id, { question, answer, category, answerHighlights: answerHighlights ?? [] })
       setEditTarget(null)
     } else {
-      await db.quizzes.add({ question, answer, category, excluded: false, createdAt: Date.now() })
-      // 저장 후 카테고리 기억, 폼은 열린 채로 유지해서 연속 입력 가능
+      await db.quizzes.add({ question, answer, category, excluded: false, createdAt: Date.now(), answerHighlights: answerHighlights ?? [] })
       setLastCategory(category)
       setShowForm(false)
     }
