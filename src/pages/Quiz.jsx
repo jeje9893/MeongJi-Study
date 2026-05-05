@@ -223,6 +223,7 @@ export default function Quiz() {
   const [results, setResults] = useState([])
   const [highlightMode, setHighlightMode] = useState(false)
   const [quizHighlights, setQuizHighlights] = useState([])
+  const [pendingHighlight, setPendingHighlight] = useState(null)
   const answerRef = useRef()
   // isReviewMode가 바뀌면 phase를 setup으로 리셋 (배너 재클릭 등 대응)
   const [lastReviewMode, setLastReviewMode] = useState(isReviewMode)
@@ -297,16 +298,22 @@ export default function Quiz() {
     setResults(prev => [...prev, { quiz: current, isCorrect }])
     if (!isCorrect) {
       setQuizHighlights(current.answerHighlights || [])
+      setPendingHighlight(null)
       setHighlightMode(true)
       return
     }
     advanceQuiz()
   }
 
-  function handleAddHighlightFromSelection() {
+  function handleAnswerPointerUp() {
     const offset = getSelectionOffsets(answerRef.current)
-    if (!offset) return
-    setQuizHighlights(prev => mergeHighlights([...prev, offset]))
+    setPendingHighlight(offset)
+  }
+
+  function handleAddHighlightFromSelection() {
+    if (!pendingHighlight) return
+    setQuizHighlights(prev => mergeHighlights([...prev, pendingHighlight]))
+    setPendingHighlight(null)
     window.getSelection()?.removeAllRanges()
   }
 
@@ -389,13 +396,15 @@ export default function Quiz() {
             <p
               ref={answerRef}
               style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap', userSelect: 'text', cursor: 'text' }}
+              onPointerUp={handleAnswerPointerUp}
             >
               {renderWithHighlights(current.answer, quizHighlights)}
             </p>
           </div>
           <button
             className="btn btn-secondary"
-            style={{ marginBottom: 10, background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', border: '1px solid rgba(251,191,36,0.3)' }}
+            disabled={!pendingHighlight}
+            style={{ marginBottom: 10, background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', border: '1px solid rgba(251,191,36,0.3)', opacity: pendingHighlight ? 1 : 0.45 }}
             onClick={handleAddHighlightFromSelection}
           >
             🖊 선택 구간 형광펜 추가
