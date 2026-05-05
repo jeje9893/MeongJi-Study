@@ -1,6 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { db } from '../db'
+import changelogEntries from '../changelog'
+
+const gitInfo = __GIT_INFO__
 
 function getStreak(records) {
   if (!records.length) return 0
@@ -29,10 +33,34 @@ function getMonthAgo() {
   return d.toISOString().slice(0, 10)
 }
 
+const BANNER_KEY = 'dismissed_banner'
+
+function getBannerContent() {
+  if (changelogEntries.length > 0) {
+    const latest = changelogEntries[0]
+    return { text: latest.text, date: latest.date }
+  }
+  if (gitInfo.message) {
+    return { text: gitInfo.message, date: gitInfo.date }
+  }
+  return null
+}
+
 export default function Home() {
   const navigate = useNavigate()
   const quizzes = useLiveQuery(() => db.quizzes.toArray(), [])
   const records = useLiveQuery(() => db.records.toArray(), [])
+
+  const bannerContent = getBannerContent()
+  const bannerKey = bannerContent ? `${BANNER_KEY}_${bannerContent.date}_${bannerContent.text.slice(0, 20)}` : null
+  const [bannerDismissed, setBannerDismissed] = useState(
+    () => bannerKey ? localStorage.getItem(bannerKey) === '1' : true
+  )
+
+  function dismissBanner() {
+    localStorage.setItem(bannerKey, '1')
+    setBannerDismissed(true)
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   const studyRecords = records?.filter(r => !r.isReview) || []
@@ -86,6 +114,50 @@ export default function Home() {
         </p>
         <h1 className="page-title">나만의 퀴즈 📚</h1>
       </div>
+
+      {/* 업데이트 배너 */}
+      {bannerContent && !bannerDismissed && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            background: 'linear-gradient(135deg, #0c1a33, #1e293b)',
+            border: '1px solid rgba(99,179,237,0.3)',
+            position: 'relative',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ fontSize: 26, lineHeight: 1 }}>🆕</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, color: '#93c5fd', marginBottom: 3, fontSize: 13 }}>
+                업데이트
+                {bannerContent.date && (
+                  <span style={{ fontWeight: 400, color: 'var(--text2)', marginLeft: 8 }}>{bannerContent.date}</span>
+                )}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>
+                {bannerContent.text}
+              </div>
+            </div>
+            <button
+              onClick={dismissBanner}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text2)',
+                fontSize: 16,
+                cursor: 'pointer',
+                padding: '0 0 0 8px',
+                lineHeight: 1,
+                flexShrink: 0,
+              }}
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 복습 알림 배너 */}
       {overdueCount > 0 && (

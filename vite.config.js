@@ -1,8 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'child_process'
+
+function getGitInfo() {
+  try {
+    const message = execSync('git log -1 --pretty=%s').toString().trim()
+    const date = execSync('git log -1 --pretty=%cs').toString().trim()
+    return JSON.stringify({ message, date })
+  } catch {
+    return JSON.stringify({ message: '', date: '' })
+  }
+}
 
 export default defineConfig({
+  define: {
+    __GIT_INFO__: getGitInfo(),
+  },
   plugins: [
     react(),
     VitePWA({

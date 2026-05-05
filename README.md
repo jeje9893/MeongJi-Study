@@ -1,16 +1,55 @@
-# React + Vite
+# 나만의 퀴즈 앱
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+개인 학습용 퀴즈 앱. 문제를 직접 추가하고, 매일 퀴즈를 풀며, 기록을 관리할 수 있습니다.
 
-Currently, two official plugins are available:
+## 주요 기능
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- 문제 추가 / 수정 / 삭제 (카테고리 지원)
+- 풀어본 횟수 기준 순서 정렬로 퀴즈 출제
+- 연속 학습 스트릭, 정답률 통계
+- 한 달 이상 안 푼 문제 복습 알림
+- 데이터 내보내기 / 가져오기
+- PWA 설치 지원
 
-## React Compiler
+## 홈 업데이트 배너
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+홈 탭 상단에 최근 업데이트 내용을 보여주는 배너가 있습니다.
 
-## Expanding the ESLint configuration
+### 우선순위
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| 순서 | 방법 | 설명 |
+|------|------|------|
+| 1순위 | `src/changelog.js` 직접 작성 | `entries` 배열에 항목을 추가하면 최신 항목이 표시됨 |
+| 2순위 | git 커밋 자동 표시 | `entries`가 비어있으면 마지막 커밋 메시지와 날짜가 자동으로 표시됨 |
+
+### 직접 텍스트 작성 방법
+
+`src/changelog.js`를 열고 `entries` 배열에 항목을 추가합니다.
+**최신 항목을 맨 위에** 추가하세요.
+
+```js
+const entries = [
+  {
+    date: '2026-05-05',
+    text: '퀴즈 문제 선택 방식 개선 — 풀어본 횟수 기준 순서 정렬',
+  },
+  {
+    date: '2026-04-20',
+    text: '복습 알림 기능 추가',
+  },
+]
+```
+
+### 배너 동작 방식
+
+- 배너는 ✕ 버튼으로 닫을 수 있습니다
+- 닫은 기록은 localStorage에 저장되어 같은 내용은 다시 뜨지 않습니다
+- 날짜나 텍스트가 바뀌면(새 커밋 또는 새 항목 추가) 배너가 다시 표시됩니다
+
+## 개발
+
+```bash
+npm install
+npm run dev
+npm run build
+```
