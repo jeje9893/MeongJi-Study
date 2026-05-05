@@ -392,7 +392,7 @@ export default function Manage() {
                   </button>
                 </div>
                 <div style={{ fontWeight: 500, marginBottom: 8, lineHeight: 1.6, marginTop: 8 }}>{q.question}</div>
-                <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.6 }}>→ {q.answer}</div>
+                <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>→ {renderWithHighlights(q.answer, q.answerHighlights)}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-secondary" style={{ fontSize: 13, padding: '8px 14px' }} onClick={() => setEditTarget(q)}>수정</button>
                   <button className="btn btn-danger" style={{ fontSize: 13, padding: '8px 14px' }} onClick={() => handleDelete(q.id)}>삭제</button>
