@@ -9,32 +9,43 @@ function getDateMonthAgo() {
   return d.toISOString().slice(0, 10)
 }
 
-// 안 풀어본 문제 우선, 틀린 문제 다음, 맞은 문제 마지막으로 가중치 부여 후 선택
+// 안 풀어본 문제 우선, 틀린 문제 다음, 맞은 문제 마지막으로 가중치 부여 후 선택 방식
+// function weightedSelect(pool, recordMap, count) {
+//   const weighted = pool.map(q => {
+//     const history = recordMap[q.id] || []
+//     if (history.length === 0) return { q, weight: 5 }
+//     const lastCorrect = history[history.length - 1].isCorrect
+//     if (!lastCorrect) return { q, weight: 3 }
+//     const correctRate = history.filter(r => r.isCorrect).length / history.length
+//     return { q, weight: Math.max(1, Math.round((1 - correctRate) * 4 + 1)) }
+//   })
+
+//   const selected = []
+//   const remaining = [...weighted]
+
+//   for (let i = 0; i < Math.min(count, pool.length); i++) {
+//     const total = remaining.reduce((s, w) => s + w.weight, 0)
+//     let rand = Math.random() * total
+//     let idx = 0
+//     for (; idx < remaining.length - 1; idx++) {
+//       rand -= remaining[idx].weight
+//       if (rand <= 0) break
+//     }
+//     selected.push(remaining[idx].q)
+//     remaining.splice(idx, 1)
+//   }
+//   return selected
+// }
+
+// 풀어본 횟수 기준 오름차순 정렬 후 선택 (안풀어본 → 적게 푼 순)
 function weightedSelect(pool, recordMap, count) {
-  const weighted = pool.map(q => {
-    const history = recordMap[q.id] || []
-    if (history.length === 0) return { q, weight: 5 }
-    const lastCorrect = history[history.length - 1].isCorrect
-    if (!lastCorrect) return { q, weight: 3 }
-    const correctRate = history.filter(r => r.isCorrect).length / history.length
-    return { q, weight: Math.max(1, Math.round((1 - correctRate) * 4 + 1)) }
+  const sorted = [...pool].sort((a, b) => {
+    const aCount = (recordMap[a.id] || []).length
+    const bCount = (recordMap[b.id] || []).length
+    return aCount - bCount  // 적게 푼 문제가 앞으로
   })
 
-  const selected = []
-  const remaining = [...weighted]
-
-  for (let i = 0; i < Math.min(count, pool.length); i++) {
-    const total = remaining.reduce((s, w) => s + w.weight, 0)
-    let rand = Math.random() * total
-    let idx = 0
-    for (; idx < remaining.length - 1; idx++) {
-      rand -= remaining[idx].weight
-      if (rand <= 0) break
-    }
-    selected.push(remaining[idx].q)
-    remaining.splice(idx, 1)
-  }
-  return selected
+  return sorted.slice(0, Math.min(count, sorted.length))
 }
 
 // 설정 화면
