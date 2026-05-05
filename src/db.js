@@ -37,6 +37,16 @@ db.version(4).stores({
   })
 })
 
+// 버전 5: answerHighlights 추가 (형광펜 마킹)
+db.version(5).stores({
+  quizzes: '++id, category, createdAt, excluded, lastReviewedAt',
+  records: '++id, quizId, date, isCorrect, reviewDate'
+}).upgrade(tx => {
+  return tx.table('quizzes').toCollection().modify(q => {
+    if (!q.answerHighlights) q.answerHighlights = []
+  })
+})
+
 // 전체 데이터 내보내기
 export async function exportData() {
   const quizzes = await db.quizzes.toArray()
@@ -86,7 +96,8 @@ export async function importData(file) {
         ...rest,
         excluded: rest.excluded ?? false,
         createdAt: rest.createdAt ?? Date.now(),
-        lastReviewedAt: rest.lastReviewedAt ?? null
+        lastReviewedAt: rest.lastReviewedAt ?? null,
+        answerHighlights: rest.answerHighlights ?? [],
       })
       idMap[oldId] = newId
       existingSet.add(key)
