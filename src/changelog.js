@@ -19,6 +19,10 @@ const entries = [
   //   date: '2026-05-05',
   //   text: '퀴즈 문제 선택 방식 개선 — 풀어본 횟수 기준 순서 정렬',
   // },
+  {
+    date: '2026-05-06',
+    text: '명지야 공부 화이팅'
+  }
 ]
 
 export default entries
