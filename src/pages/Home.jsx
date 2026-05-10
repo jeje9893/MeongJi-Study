@@ -135,11 +135,35 @@ export default function Home() {
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>
-          {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-        </p>
-        <h1 className="page-title">나만의 퀴즈 📚</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+        <div>
+          <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>
+            {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
+          </p>
+          <h1 className="page-title">나만의 퀴즈 📚</h1>
+        </div>
+        <button
+          onClick={handleCheckUpdate}
+          disabled={updateState === 'checking'}
+          style={{
+            flexShrink: 0,
+            marginTop: 2,
+            padding: '6px 12px',
+            borderRadius: 100,
+            border: '1px solid var(--bg3)',
+            background: updateState === 'latest' ? 'rgba(110,231,183,0.12)' : 'var(--bg2)',
+            color: updateState === 'latest' ? 'var(--accent)' : 'var(--text2)',
+            fontSize: 12,
+            fontFamily: 'inherit',
+            cursor: updateState === 'checking' ? 'default' : 'pointer',
+            opacity: updateState === 'checking' ? 0.5 : 1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {updateState === 'checking' && '확인 중...'}
+          {updateState === 'latest' && '✅ 최신 버전'}
+          {updateState === 'idle' && '🔄 업데이트'}
+        </button>
       </div>
 
       {/* 업데이트 배너 */}
@@ -268,21 +292,6 @@ export default function Home() {
         </button>
       )}
 
-      <div style={{ textAlign: 'center', marginTop: 28 }}>
-        <button
-          onClick={handleCheckUpdate}
-          disabled={updateState === 'checking'}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 12, color: 'var(--text2)', fontFamily: 'inherit',
-            opacity: updateState === 'checking' ? 0.5 : 1,
-          }}
-        >
-          {updateState === 'checking' && '업데이트 확인 중...'}
-          {updateState === 'latest' && '✅ 최신 버전입니다'}
-          {updateState === 'idle' && '🔄 업데이트 확인'}
-        </button>
-      </div>
     </div>
   )
 }
