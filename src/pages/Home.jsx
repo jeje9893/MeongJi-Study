@@ -56,10 +56,37 @@ export default function Home() {
   const [bannerDismissed, setBannerDismissed] = useState(
     () => bannerKey ? localStorage.getItem(bannerKey) === '1' : true
   )
+  const [updateState, setUpdateState] = useState('idle') // 'idle' | 'checking' | 'latest'
 
   function dismissBanner() {
     localStorage.setItem(bannerKey, '1')
     setBannerDismissed(true)
+  }
+
+  async function handleCheckUpdate() {
+    if (updateState === 'checking') return
+    setUpdateState('checking')
+    try {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (!reg) { setUpdateState('idle'); return }
+
+      let reloaded = false
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        reloaded = true
+        window.location.reload()
+      }, { once: true })
+
+      await reg.update()
+
+      // SW 설치/활성화 대기 (2초 안에 controllerchange 없으면 최신 버전)
+      await new Promise(r => setTimeout(r, 2000))
+      if (!reloaded) {
+        setUpdateState('latest')
+        setTimeout(() => setUpdateState('idle'), 2500)
+      }
+    } catch {
+      setUpdateState('idle')
+    }
   }
 
   const today = new Date().toISOString().slice(0, 10)
@@ -108,11 +135,35 @@ export default function Home() {
 
   return (
     <div>
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>
-          {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-        </p>
-        <h1 className="page-title">나만의 퀴즈 📚</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+        <div>
+          <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>
+            {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
+          </p>
+          <h1 className="page-title">나만의 퀴즈 📚</h1>
+        </div>
+        <button
+          onClick={handleCheckUpdate}
+          disabled={updateState === 'checking'}
+          style={{
+            flexShrink: 0,
+            marginTop: 2,
+            padding: '6px 12px',
+            borderRadius: 100,
+            border: '1px solid var(--bg3)',
+            background: updateState === 'latest' ? 'rgba(110,231,183,0.12)' : 'var(--bg2)',
+            color: updateState === 'latest' ? 'var(--accent)' : 'var(--text2)',
+            fontSize: 12,
+            fontFamily: 'inherit',
+            cursor: updateState === 'checking' ? 'default' : 'pointer',
+            opacity: updateState === 'checking' ? 0.5 : 1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {updateState === 'checking' && '확인 중...'}
+          {updateState === 'latest' && '✅ 최신 버전'}
+          {updateState === 'idle' && '🔄 업데이트'}
+        </button>
       </div>
 
       {/* 업데이트 배너 */}
@@ -240,6 +291,7 @@ export default function Home() {
           {completedToday ? '다시 풀기 🔄' : '오늘의 퀴즈 시작 🚀'}
         </button>
       )}
+
     </div>
   )
 }
