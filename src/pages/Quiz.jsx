@@ -291,11 +291,24 @@ export default function Quiz() {
     }
   }
 
+  async function handlePrevious() {
+    if (idx === 0) return
+    // 직전 문제의 기록을 되돌려서 다시 풀 수 있게 함
+    const prevResult = results[results.length - 1]
+    if (prevResult?.recordId != null) {
+      await db.records.delete(prevResult.recordId)
+    }
+    setResults(prev => prev.slice(0, -1))
+    setHighlightMode(false)
+    setIdx(idx - 1)
+    setRevealed(false)
+  }
+
   async function handleAnswer(isCorrect) {
     const current = sessionQuizzes[idx]
     const today = new Date().toISOString().slice(0, 10)
-    await db.records.add({ quizId: current.id, date: today, isCorrect })
-    setResults(prev => [...prev, { quiz: current, isCorrect }])
+    const recordId = await db.records.add({ quizId: current.id, date: today, isCorrect })
+    setResults(prev => [...prev, { quiz: current, isCorrect, recordId }])
     if (!isCorrect) {
       setQuizHighlights(current.answerHighlights || [])
       setPendingHighlight(null)
@@ -354,7 +367,12 @@ export default function Quiz() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <button onClick={handleGoToSetup} style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', fontSize: 14, padding: 0 }}>← 설정으로</button>
-        <span className="badge">{idx + 1} / {sessionQuizzes.length}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {idx > 0 && !highlightMode && (
+            <button onClick={handlePrevious} style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', fontSize: 14, padding: 0 }}>← 이전 문제</button>
+          )}
+          <span className="badge">{idx + 1} / {sessionQuizzes.length}</span>
+        </div>
       </div>
 
       <div style={{ height: 4, background: 'var(--bg3)', borderRadius: 2, marginBottom: 28 }}>
