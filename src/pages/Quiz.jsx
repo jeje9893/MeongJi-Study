@@ -293,12 +293,13 @@ export default function Quiz() {
 
   async function handlePrevious() {
     if (idx === 0) return
-    // 직전 문제의 기록을 되돌려서 다시 풀 수 있게 함
-    const prevResult = results[results.length - 1]
+    // 직전 문제의 답안 기록을 되돌려 다시 풀 수 있게 함 (건너뛴 문제는 기록이 없음)
+    const prevQuiz = sessionQuizzes[idx - 1]
+    const prevResult = results.find(r => r.quiz.id === prevQuiz.id)
     if (prevResult?.recordId != null) {
       await db.records.delete(prevResult.recordId)
     }
-    setResults(prev => prev.slice(0, -1))
+    setResults(prev => prev.filter(r => r.quiz.id !== prevQuiz.id))
     setHighlightMode(false)
     setIdx(idx - 1)
     setRevealed(false)
@@ -367,12 +368,7 @@ export default function Quiz() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <button onClick={handleGoToSetup} style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', fontSize: 14, padding: 0 }}>← 설정으로</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {idx > 0 && !highlightMode && (
-            <button onClick={handlePrevious} style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', fontSize: 14, padding: 0 }}>← 이전 문제</button>
-          )}
-          <span className="badge">{idx + 1} / {sessionQuizzes.length}</span>
-        </div>
+        <span className="badge">{idx + 1} / {sessionQuizzes.length}</span>
       </div>
 
       <div style={{ height: 4, background: 'var(--bg3)', borderRadius: 2, marginBottom: 28 }}>
@@ -390,7 +386,20 @@ export default function Quiz() {
       </div>
 
       {!revealed ? (
-        <button className="btn btn-secondary" onClick={() => setRevealed(true)}>정답 보기 👀</button>
+        <div>
+          <button className="btn btn-secondary" onClick={() => setRevealed(true)}>정답 보기 👀</button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+            <button
+              className="btn btn-secondary"
+              onClick={handlePrevious}
+              disabled={idx === 0}
+              style={{ opacity: idx === 0 ? 0.5 : 1 }}
+            >
+              ← 이전 문제
+            </button>
+            <button className="btn btn-secondary" onClick={advanceQuiz}>건너뛰기 →</button>
+          </div>
+        </div>
       ) : !highlightMode ? (
         <div>
           <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(110,231,183,0.3)', background: 'rgba(110,231,183,0.05)' }}>
@@ -402,6 +411,17 @@ export default function Quiz() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <button className="btn" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--danger)' }} onClick={() => handleAnswer(false)}>❌ 틀렸어</button>
             <button className="btn" style={{ background: 'rgba(110,231,183,0.15)', color: 'var(--accent)' }} onClick={() => handleAnswer(true)}>✅ 맞았어</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+            <button
+              className="btn btn-secondary"
+              onClick={handlePrevious}
+              disabled={idx === 0}
+              style={{ opacity: idx === 0 ? 0.5 : 1 }}
+            >
+              ← 이전 문제
+            </button>
+            <button className="btn btn-secondary" onClick={advanceQuiz}>건너뛰기 →</button>
           </div>
         </div>
       ) : (
