@@ -189,6 +189,8 @@ export default function Manage() {
   const [showExcluded, setShowExcluded] = useState(false)
   // 직전에 저장한 카테고리 기억
   const [lastCategory, setLastCategory] = useState('')
+  const [search, setSearch] = useState('')
+  const [searchScope, setSearchScope] = useState('both')
   // import/export 상태
   const [importMsg, setImportMsg] = useState(null)
   const [importing, setImporting] = useState(false)
@@ -197,7 +199,14 @@ export default function Manage() {
 
   const categories = [...new Set((quizzes || []).map(q => q.category).filter(Boolean))]
 
-  const baseFiltered = (quizzes || []).filter(q => !filter || q.category === filter)
+  const searchTerm = search.trim().toLowerCase()
+  const baseFiltered = (quizzes || []).filter(q => {
+    if (filter && q.category !== filter) return false
+    if (!searchTerm) return true
+    if (searchScope === 'question') return q.question.toLowerCase().includes(searchTerm)
+    if (searchScope === 'answer') return q.answer.toLowerCase().includes(searchTerm)
+    return q.question.toLowerCase().includes(searchTerm) || q.answer.toLowerCase().includes(searchTerm)
+  })
   const active = baseFiltered.filter(q => !q.excluded)
   const excluded = baseFiltered.filter(q => q.excluded)
   const filtered = showExcluded ? excluded : active
@@ -352,6 +361,47 @@ export default function Manage() {
         </button>
       </div>
 
+      {/* 검색 */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ position: 'relative', marginBottom: 8 }}>
+          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text2)', pointerEvents: 'none', fontSize: 14 }}>🔍</span>
+          <input
+            className="input"
+            placeholder="검색..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ paddingLeft: 36, paddingRight: search ? 36 : 14 }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', fontSize: 18, padding: '0 2px', lineHeight: 1 }}
+            >×</button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[
+            { key: 'both', label: '문제+답안' },
+            { key: 'question', label: '문제' },
+            { key: 'answer', label: '답안' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setSearchScope(key)}
+              style={{
+                padding: '4px 12px', borderRadius: 100, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontFamily: 'inherit',
+                background: searchScope === key ? 'rgba(110,231,183,0.15)' : 'var(--bg3)',
+                color: searchScope === key ? 'var(--accent)' : 'var(--text2)',
+                fontWeight: searchScope === key ? 600 : 400,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 카테고리 필터 */}
       {categories.length > 0 && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -364,8 +414,8 @@ export default function Manage() {
 
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">{showExcluded ? '🚫' : '📭'}</div>
-          <p>{showExcluded ? '제외된 문제가 없어요' : '문제가 없어요'}</p>
+          <div className="empty-icon">{searchTerm ? '🔍' : showExcluded ? '🚫' : '📭'}</div>
+          <p>{searchTerm ? '검색 결과가 없어요' : showExcluded ? '제외된 문제가 없어요' : '문제가 없어요'}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
