@@ -35,8 +35,6 @@ function getMonthAgo() {
   return d.toISOString().slice(0, 10)
 }
 
-const BANNER_KEY = 'dismissed_banner'
-
 function getBannerContent() {
   if (changelogEntries.length > 0) {
     const latest = changelogEntries[0]
@@ -55,16 +53,7 @@ export default function Home() {
   const records = useCollection(`users/${user.uid}/records`)
 
   const bannerContent = getBannerContent()
-  const bannerKey = bannerContent ? `${BANNER_KEY}_${bannerContent.date}_${bannerContent.text.slice(0, 20)}` : null
-  const [bannerDismissed, setBannerDismissed] = useState(
-    () => bannerKey ? localStorage.getItem(bannerKey) === '1' : true
-  )
   const [updateState, setUpdateState] = useState('idle') // 'idle' | 'checking' | 'latest'
-
-  function dismissBanner() {
-    localStorage.setItem(bannerKey, '1')
-    setBannerDismissed(true)
-  }
 
   async function handleCheckUpdate() {
     if (updateState === 'checking') return
@@ -133,50 +122,50 @@ export default function Home() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>
             {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
           </p>
           <h1 className="page-title">나만의 퀴즈 📚</h1>
         </div>
-        <button
-          onClick={handleCheckUpdate}
-          disabled={updateState === 'checking'}
-          style={{
-            flexShrink: 0,
-            marginTop: 2,
-            padding: '6px 12px',
-            borderRadius: 100,
-            border: '1px solid var(--bg3)',
-            background: updateState === 'latest' ? 'rgba(110,231,183,0.12)' : 'var(--bg2)',
-            color: updateState === 'latest' ? 'var(--accent)' : 'var(--text2)',
-            fontSize: 12,
-            fontFamily: 'inherit',
-            cursor: updateState === 'checking' ? 'default' : 'pointer',
-            opacity: updateState === 'checking' ? 0.5 : 1,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {updateState === 'checking' && '확인 중...'}
-          {updateState === 'latest' && '✅ 최신 버전'}
-          {updateState === 'idle' && '🔄 업데이트'}
-        </button>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 0,
+          background: 'var(--bg2)', border: '1px solid var(--bg3)',
+          borderRadius: 100, overflow: 'hidden', flexShrink: 0, marginTop: 6,
+        }}>
+          <span style={{
+            fontSize: 12, color: 'var(--text2)', padding: '6px 12px',
+            maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {user.email}
+          </span>
+          <button
+            onClick={() => signOut(auth)}
+            style={{
+              fontSize: 12, color: '#93c5fd',
+              background: 'rgba(99,179,237,0.1)',
+              border: 'none', borderLeft: '1px solid var(--bg3)',
+              padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+            }}
+          >
+            로그아웃
+          </button>
+        </div>
       </div>
 
-      {/* 업데이트 배너 */}
-      {bannerContent && !bannerDismissed && (
+      {/* 업데이트 배너 (상시 표시, 버튼 내장) */}
+      {bannerContent && (
         <div
           className="card"
           style={{
             marginBottom: 16,
             background: 'linear-gradient(135deg, #0c1a33, #1e293b)',
             border: '1px solid rgba(99,179,237,0.3)',
-            position: 'relative',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <div style={{ fontSize: 26, lineHeight: 1 }}>🆕</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>🆕</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, color: '#93c5fd', marginBottom: 3, fontSize: 13 }}>
                 업데이트
@@ -189,20 +178,23 @@ export default function Home() {
               </div>
             </div>
             <button
-              onClick={dismissBanner}
+              onClick={handleCheckUpdate}
+              disabled={updateState === 'checking'}
               style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text2)',
-                fontSize: 16,
-                cursor: 'pointer',
-                padding: '0 0 0 8px',
-                lineHeight: 1,
                 flexShrink: 0,
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                border: '1px solid rgba(99,179,237,0.3)',
+                background: updateState === 'latest' ? 'rgba(110,231,183,0.15)' : 'rgba(99,179,237,0.1)',
+                fontSize: 22,
+                cursor: updateState === 'checking' ? 'default' : 'pointer',
+                opacity: updateState === 'checking' ? 0.4 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
-              aria-label="닫기"
+              title={updateState === 'latest' ? '최신 버전입니다' : '업데이트 확인'}
             >
-              ✕
+              {updateState === 'latest' ? '✅' : '🔄'}
             </button>
           </div>
         </div>
@@ -290,16 +282,6 @@ export default function Home() {
         </button>
       )}
 
-      {/* 계정 */}
-      <div style={{ marginTop: 40, paddingTop: 16, borderTop: '1px solid var(--bg3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 13, color: 'var(--text2)' }}>{user.email}</div>
-        <button
-          onClick={() => signOut(auth)}
-          style={{ fontSize: 13, color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          로그아웃
-        </button>
-      </div>
     </div>
   )
 }
