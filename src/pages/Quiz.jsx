@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db'
+import { useAuth } from '../contexts/AuthContext'
+import { useCollection } from '../hooks/useCollection'
+import { addRecord, deleteRecord, updateQuiz } from '../db'
 import { renderWithHighlights, mergeHighlights, getSelectionOffsets } from '../highlightUtils.jsx'
 
 function getDateMonthAgo() {
@@ -213,8 +214,9 @@ export default function Quiz() {
   const [searchParams, setSearchParams] = useSearchParams()
   const isReviewMode = searchParams.get('mode') === 'review'
 
-  const quizzes = useLiveQuery(() => db.quizzes.toArray(), [])
-  const allRecords = useLiveQuery(() => db.records.toArray(), [])
+  const user = useAuth()
+  const quizzes = useCollection(`users/${user.uid}/quizzes`)
+  const allRecords = useCollection(`users/${user.uid}/records`)
 
   const [phase, setPhase] = useState('setup')   // setup | playing | done
   const [sessionQuizzes, setSessionQuizzes] = useState([])
@@ -256,7 +258,7 @@ export default function Quiz() {
     const reviewIds = new Set(
       Object.entries(lastDateMap)
         .filter(([, date]) => date <= monthAgo)
-        .map(([id]) => parseInt(id))
+        .map(([id]) => id)  // Firestore ID는 문자열이므로 parseInt 불필요
     )
     return quizzes.filter(q => !q.excluded && reviewIds.has(q.id))
   })()
@@ -293,11 +295,10 @@ export default function Quiz() {
 
   async function handlePrevious() {
     if (idx === 0) return
-    // 직전 문제의 답안 기록을 되돌려 다시 풀 수 있게 함 (건너뛴 문제는 기록이 없음)
     const prevQuiz = sessionQuizzes[idx - 1]
     const prevResult = results.find(r => r.quiz.id === prevQuiz.id)
     if (prevResult?.recordId != null) {
-      await db.records.delete(prevResult.recordId)
+      await deleteRecord(user.uid, prevResult.recordId)
     }
     setResults(prev => prev.filter(r => r.quiz.id !== prevQuiz.id))
     setHighlightMode(false)
@@ -308,8 +309,8 @@ export default function Quiz() {
   async function handleAnswer(isCorrect) {
     const current = sessionQuizzes[idx]
     const today = new Date().toISOString().slice(0, 10)
-    const recordId = await db.records.add({ quizId: current.id, date: today, isCorrect })
-    setResults(prev => [...prev, { quiz: current, isCorrect, recordId }])
+    const docRef = await addRecord(user.uid, { quizId: current.id, date: today, isCorrect })
+    setResults(prev => [...prev, { quiz: current, isCorrect, recordId: docRef.id }])
     if (!isCorrect) {
       setQuizHighlights(current.answerHighlights || [])
       setPendingHighlight(null)
@@ -333,7 +334,7 @@ export default function Quiz() {
 
   async function handleHighlightDone() {
     const current = sessionQuizzes[idx]
-    await db.quizzes.update(current.id, { answerHighlights: quizHighlights })
+    await updateQuiz(user.uid, current.id, { answerHighlights: quizHighlights })
     setSessionQuizzes(prev =>
       prev.map(q => q.id === current.id ? { ...q, answerHighlights: quizHighlights } : q)
     )

@@ -19,10 +19,6 @@ const entries = [
   //   date: '2026-05-05',
   //   text: '퀴즈 문제 선택 방식 개선 — 풀어본 횟수 기준 순서 정렬',
   // },
-  {
-    date: '2026-07-06',
-    text: '문제 검색 기능 추가 (최명지 바보💕)'
-  }
 ]
 
 export default entries

@@ -1,7 +1,9 @@
-import { useLiveQuery } from 'dexie-react-hooks'
-import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { db } from '../db'
+import { useNavigate } from 'react-router-dom'
+import { signOut } from 'firebase/auth'
+import { auth } from '../firebase'
+import { useAuth } from '../contexts/AuthContext'
+import { useCollection } from '../hooks/useCollection'
 import changelogEntries from '../changelog'
 
 const gitInfo = __GIT_INFO__
@@ -48,8 +50,9 @@ function getBannerContent() {
 
 export default function Home() {
   const navigate = useNavigate()
-  const quizzes = useLiveQuery(() => db.quizzes.toArray(), [])
-  const records = useLiveQuery(() => db.records.toArray(), [])
+  const user = useAuth()
+  const quizzes = useCollection(`users/${user.uid}/quizzes`)
+  const records = useCollection(`users/${user.uid}/records`)
 
   const bannerContent = getBannerContent()
   const bannerKey = bannerContent ? `${BANNER_KEY}_${bannerContent.date}_${bannerContent.text.slice(0, 20)}` : null
@@ -78,7 +81,6 @@ export default function Home() {
 
       await reg.update()
 
-      // SW 설치/활성화 대기 (2초 안에 controllerchange 없으면 최신 버전)
       await new Promise(r => setTimeout(r, 2000))
       if (!reloaded) {
         setUpdateState('latest')
@@ -100,19 +102,16 @@ export default function Home() {
     ? Math.round((studyRecords.filter(r => r.isCorrect).length / studyRecords.length) * 100)
     : 0
 
-  // 복습 알림: History와 동일하게 날짜 카드 단위로 계산
   const monthAgo = getMonthAgo()
   const overdueCount = (() => {
     if (!records) return 0
 
-    // 날짜별 문제 그룹 (일반 학습만)
     const byDate = {}
     studyRecords.forEach(r => {
       if (!byDate[r.date]) byDate[r.date] = []
       byDate[r.date].push(r)
     })
 
-    // quizId별 마지막 복습 날짜
     const lastReviewDateMap = {}
     records.filter(r => r.isReview).forEach(r => {
       if (!lastReviewDateMap[r.quizId] || r.date > lastReviewDateMap[r.quizId]) {
@@ -120,7 +119,6 @@ export default function Home() {
       }
     })
 
-    // 날짜 카드 단위로 overdue 여부 계산 (History와 동일 로직)
     return Object.entries(byDate).filter(([date, recs]) => {
       const quizIds = [...new Set(recs.map(r => r.quizId))]
       const reviewDates = quizIds.map(id => lastReviewDateMap[id]).filter(Boolean)
@@ -292,6 +290,16 @@ export default function Home() {
         </button>
       )}
 
+      {/* 계정 */}
+      <div style={{ marginTop: 40, paddingTop: 16, borderTop: '1px solid var(--bg3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 13, color: 'var(--text2)' }}>{user.email}</div>
+        <button
+          onClick={() => signOut(auth)}
+          style={{ fontSize: 13, color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          로그아웃
+        </button>
+      </div>
     </div>
   )
 }

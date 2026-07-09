@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db, exportData, importData } from '../db'
+import { useAuth } from '../contexts/AuthContext'
+import { useCollection } from '../hooks/useCollection'
+import { addQuiz, updateQuiz, deleteQuiz, exportFirestoreData, importFirestoreData } from '../db'
 import { renderWithHighlights, mergeHighlights } from '../highlightUtils.jsx'
 
 function CategoryInput({ value, onChange, existingCategories }) {
@@ -182,16 +183,18 @@ function QuizForm({ initial, onSave, onCancel, existingCategories, lastCategory 
 }
 
 export default function Manage() {
-  const quizzes = useLiveQuery(() => db.quizzes.orderBy('createdAt').reverse().toArray(), [])
+  const user = useAuth()
+  const rawQuizzes = useCollection(`users/${user.uid}/quizzes`)
+  // 최신순 정렬
+  const quizzes = rawQuizzes ? [...rawQuizzes].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) : undefined
+
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [filter, setFilter] = useState('')
   const [showExcluded, setShowExcluded] = useState(false)
-  // 직전에 저장한 카테고리 기억
   const [lastCategory, setLastCategory] = useState('')
   const [search, setSearch] = useState('')
   const [searchScope, setSearchScope] = useState('both')
-  // import/export 상태
   const [importMsg, setImportMsg] = useState(null)
   const [importing, setImporting] = useState(false)
   const [showDataPanel, setShowDataPanel] = useState(false)
@@ -215,10 +218,10 @@ export default function Manage() {
 
   async function handleSave({ question, answer, category, answerHighlights }) {
     if (editTarget) {
-      await db.quizzes.update(editTarget.id, { question, answer, category, answerHighlights: answerHighlights ?? [] })
+      await updateQuiz(user.uid, editTarget.id, { question, answer, category, answerHighlights: answerHighlights ?? [] })
       setEditTarget(null)
     } else {
-      await db.quizzes.add({ question, answer, category, excluded: false, createdAt: Date.now(), answerHighlights: answerHighlights ?? [] })
+      await addQuiz(user.uid, { question, answer, category, excluded: false, createdAt: Date.now(), answerHighlights: answerHighlights ?? [] })
       setLastCategory(category)
       setShowForm(false)
     }
@@ -226,17 +229,16 @@ export default function Manage() {
 
   async function handleDelete(id) {
     if (!confirm('이 문제를 삭제할까요?')) return
-    await db.quizzes.delete(id)
-    await db.records.where('quizId').equals(id).delete()
+    await deleteQuiz(user.uid, id)
   }
 
   async function handleToggleExclude(q) {
-    await db.quizzes.update(q.id, { excluded: !q.excluded })
+    await updateQuiz(user.uid, q.id, { excluded: !q.excluded })
   }
 
   async function handleExport() {
     try {
-      await exportData()
+      await exportFirestoreData(user.uid)
     } catch (e) {
       alert('내보내기 실패: ' + e.message)
     }
@@ -248,7 +250,7 @@ export default function Manage() {
     setImporting(true)
     setImportMsg(null)
     try {
-      const result = await importData(file)
+      const result = await importFirestoreData(user.uid, file)
       setImportMsg({
         type: 'success',
         text: `완료! 새 문제 ${result.addedCount}개 추가, 중복 ${result.skippedCount}개 건너뜀, 기록 ${result.recordsAdded}개 추가`

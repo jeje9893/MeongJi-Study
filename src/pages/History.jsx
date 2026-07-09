@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db'
+import { useAuth } from '../contexts/AuthContext'
+import { useCollection } from '../hooks/useCollection'
+import { addRecord, bulkDeleteRecords } from '../db'
 
 const TODAY = new Date().toISOString().slice(0, 10)
 
@@ -10,7 +11,6 @@ function getMonthAgo() {
   return d.toISOString().slice(0, 10)
 }
 
-// 날짜 포맷
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('ko-KR', {
     month: 'long', day: 'numeric', weekday: 'short'
@@ -18,7 +18,7 @@ function formatDate(dateStr) {
 }
 
 // 복습 세션 플레이어
-function ReviewPlayer({ quizzes, sessionDate, onDone }) {
+function ReviewPlayer({ quizzes, sessionDate, onDone, uid }) {
   const [idx, setIdx] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [results, setResults] = useState([])
@@ -26,8 +26,7 @@ function ReviewPlayer({ quizzes, sessionDate, onDone }) {
   const current = quizzes[idx]
 
   async function handleAnswer(isCorrect) {
-    // 복습 기록 저장 (isReview: true 표시, date는 오늘)
-    await db.records.add({ quizId: current.id, date: TODAY, isCorrect, isReview: true })
+    await addRecord(uid, { quizId: current.id, date: TODAY, isCorrect, isReview: true })
 
     const newResults = [...results, { quiz: current, isCorrect }]
     setResults(newResults)
@@ -115,8 +114,9 @@ function ReviewResult({ results, onBack }) {
 }
 
 export default function History() {
-  const records = useLiveQuery(() => db.records.toArray(), [])
-  const quizzes = useLiveQuery(() => db.quizzes.toArray(), [])
+  const user = useAuth()
+  const records = useCollection(`users/${user.uid}/records`)
+  const quizzes = useCollection(`users/${user.uid}/quizzes`)
 
   const [reviewSession, setReviewSession] = useState(null)
   const [reviewResults, setReviewResults] = useState(null)
@@ -126,7 +126,6 @@ export default function History() {
   const quizMap = Object.fromEntries(quizzes.map(q => [q.id, q]))
   const monthAgo = getMonthAgo()
 
-  // 일반 학습 기록만 날짜별 그룹 (isReview:true 제외)
   const studyRecords = records.filter(r => !r.isReview)
   const byDate = {}
   studyRecords.forEach(r => {
@@ -135,8 +134,6 @@ export default function History() {
   })
   const dates = Object.keys(byDate).sort().reverse()
 
-  // quizId별 마지막 복습 날짜를 records에서 직접 계산
-  // → useLiveQuery가 records 변경을 감지해서 즉시 반영됨
   const lastReviewDateMap = {}
   records.filter(r => r.isReview).forEach(r => {
     if (!lastReviewDateMap[r.quizId] || r.date > lastReviewDateMap[r.quizId]) {
@@ -147,14 +144,10 @@ export default function History() {
   function getDateReviewStatus(date, recs) {
     const quizIds = [...new Set(recs.map(r => r.quizId))]
 
-    // 이 날짜 카드의 문제들 중 복습한 것들의 가장 최근 복습 날짜
     const reviewDates = quizIds
       .map(id => lastReviewDateMap[id])
       .filter(Boolean)
 
-    // 카드 전체 기준 referenceDate:
-    // - 모든 문제가 복습됐으면 → 가장 최근 복습 날짜
-    // - 일부만 복습됐거나 아예 없으면 → 원래 푼 날짜(date)
     const allReviewed = reviewDates.length === quizIds.length
     const latestReviewDate = reviewDates.length > 0
       ? reviewDates.reduce((a, b) => a > b ? a : b)
@@ -163,7 +156,6 @@ export default function History() {
     const referenceDate = allReviewed ? latestReviewDate : date
     const isOverdue = referenceDate <= monthAgo
 
-    // 며칠 지났는지 계산
     const refMs = new Date(referenceDate).getTime()
     const todayMs = new Date(TODAY).getTime()
     const daysSince = Math.floor((todayMs - refMs) / (1000 * 60 * 60 * 24))
@@ -187,7 +179,7 @@ export default function History() {
   async function handleDeleteDate(date, recs) {
     if (!confirm(`${formatDate(date)} 기록을 삭제할까요?`)) return
     const ids = recs.map(r => r.id)
-    await db.records.bulkDelete(ids)
+    await bulkDeleteRecords(user.uid, ids)
   }
 
   function handleReviewDone(results) {
@@ -195,18 +187,17 @@ export default function History() {
     setReviewSession(null)
   }
 
-  // 복습 중
   if (reviewSession) {
     return (
       <ReviewPlayer
         quizzes={reviewSession.quizzes}
         sessionDate={reviewSession.date}
         onDone={handleReviewDone}
+        uid={user.uid}
       />
     )
   }
 
-  // 복습 완료 결과
   if (reviewResults) {
     return <ReviewResult results={reviewResults} onBack={() => setReviewResults(null)} />
   }
@@ -292,7 +283,6 @@ export default function History() {
                 </div>
               </div>
 
-              {/* 마지막 복습 날짜 / 경과일 */}
               <div style={{ fontSize: 12, color: isOverdue ? 'var(--danger)' : 'var(--text2)', marginBottom: 10 }}>
                 {allReviewed && latestReviewDate
                   ? `마지막 복습: ${formatDate(latestReviewDate)} · ${daysSince}일 전`
@@ -300,7 +290,6 @@ export default function History() {
                 }
               </div>
 
-              {/* 미니 바 */}
               <div style={{ height: 3, background: 'var(--bg3)', borderRadius: 2, marginBottom: 12 }}>
                 <div style={{ height: '100%', width: `${pct}%`, background: pct >= 70 ? 'var(--accent)' : 'var(--warning)', borderRadius: 2 }} />
               </div>

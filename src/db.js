@@ -1,14 +1,19 @@
 import Dexie from 'dexie'
+import {
+  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where
+} from 'firebase/firestore'
+import { firestoreDb } from './firebase'
 
-export const db = new Dexie('QuizDB')
+// Dexie 인스턴스 (마이그레이션 마법사 전용 — 로컬 IndexedDB 읽기용)
+export const dexieDb = new Dexie('QuizDB')
 
-db.version(1).stores({
+dexieDb.version(1).stores({
   quizzes: '++id, category, createdAt',
   records: '++id, quizId, date, isCorrect'
 })
 
 // 버전 2: excluded 필드 추가
-db.version(2).stores({
+dexieDb.version(2).stores({
   quizzes: '++id, category, createdAt, excluded',
   records: '++id, quizId, date, isCorrect'
 }).upgrade(tx => {
@@ -18,7 +23,7 @@ db.version(2).stores({
 })
 
 // 버전 3: reviewDate 필드 추가
-db.version(3).stores({
+dexieDb.version(3).stores({
   quizzes: '++id, category, createdAt, excluded',
   records: '++id, quizId, date, isCorrect, reviewDate'
 }).upgrade(tx => {
@@ -27,8 +32,8 @@ db.version(3).stores({
   })
 })
 
-// 버전 4: quizzes에 lastReviewedAt 추가 (복습 탭 날짜 추적용)
-db.version(4).stores({
+// 버전 4: quizzes에 lastReviewedAt 추가
+dexieDb.version(4).stores({
   quizzes: '++id, category, createdAt, excluded, lastReviewedAt',
   records: '++id, quizId, date, isCorrect, reviewDate'
 }).upgrade(tx => {
@@ -37,8 +42,8 @@ db.version(4).stores({
   })
 })
 
-// 버전 5: answerHighlights 추가 (형광펜 마킹)
-db.version(5).stores({
+// 버전 5: answerHighlights 추가
+dexieDb.version(5).stores({
   quizzes: '++id, category, createdAt, excluded, lastReviewedAt',
   records: '++id, quizId, date, isCorrect, reviewDate'
 }).upgrade(tx => {
@@ -47,15 +52,66 @@ db.version(5).stores({
   })
 })
 
-// 전체 데이터 내보내기
-export async function exportData() {
-  const quizzes = await db.quizzes.toArray()
-  const records = await db.records.toArray()
+// ── Firestore CRUD 헬퍼 ──────────────────────────────────────────────────────
+
+function quizzesRef(uid) {
+  return collection(firestoreDb, `users/${uid}/quizzes`)
+}
+
+function recordsRef(uid) {
+  return collection(firestoreDb, `users/${uid}/records`)
+}
+
+export async function addQuiz(uid, data) {
+  return addDoc(quizzesRef(uid), {
+    question: data.question,
+    answer: data.answer,
+    category: data.category ?? '',
+    excluded: data.excluded ?? false,
+    createdAt: data.createdAt ?? Date.now(),
+    lastReviewedAt: data.lastReviewedAt ?? null,
+    answerHighlights: data.answerHighlights ?? [],
+  })
+}
+
+export async function updateQuiz(uid, quizId, data) {
+  return updateDoc(doc(firestoreDb, `users/${uid}/quizzes`, quizId), data)
+}
+
+export async function deleteQuiz(uid, quizId) {
+  await deleteDoc(doc(firestoreDb, `users/${uid}/quizzes`, quizId))
+  const q = query(recordsRef(uid), where('quizId', '==', quizId))
+  const snap = await getDocs(q)
+  if (snap.empty) return
+  const batch = writeBatch(firestoreDb)
+  snap.docs.forEach(d => batch.delete(d.ref))
+  await batch.commit()
+}
+
+export async function addRecord(uid, data) {
+  return addDoc(recordsRef(uid), data)
+}
+
+export async function deleteRecord(uid, recordId) {
+  return deleteDoc(doc(firestoreDb, `users/${uid}/records`, recordId))
+}
+
+export async function bulkDeleteRecords(uid, ids) {
+  const batch = writeBatch(firestoreDb)
+  ids.forEach(id => batch.delete(doc(firestoreDb, `users/${uid}/records`, id)))
+  await batch.commit()
+}
+
+export async function exportFirestoreData(uid) {
+  const [quizSnap, recSnap] = await Promise.all([
+    getDocs(quizzesRef(uid)),
+    getDocs(recordsRef(uid))
+  ])
   const payload = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    quizzes,
-    records
+    quizzes: quizSnap.docs.map(d => ({ ...d.data(), id: d.id })),
+    records: recSnap.docs.map(d => ({ ...d.data(), id: d.id }))
   }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -66,19 +122,16 @@ export async function exportData() {
   URL.revokeObjectURL(url)
 }
 
-// 데이터 가져오기 (병합 방식: 기존 데이터 유지 + 새 문제 추가)
-export async function importData(file) {
+export async function importFirestoreData(uid, file) {
   const text = await file.text()
   const payload = JSON.parse(text)
   if (!payload.quizzes || !Array.isArray(payload.quizzes)) {
     throw new Error('올바른 백업 파일이 아니에요')
   }
 
-  const existingQuizzes = await db.quizzes.toArray()
-
-  const existingSet = new Set(
-    existingQuizzes.map(q => `${q.question}||${q.answer}`)
-  )
+  const existingSnap = await getDocs(quizzesRef(uid))
+  const existingQuizzes = existingSnap.docs.map(d => ({ ...d.data(), id: d.id }))
+  const existingSet = new Set(existingQuizzes.map(q => `${q.question}||${q.answer}`))
 
   const idMap = {}
   let addedCount = 0
@@ -92,14 +145,16 @@ export async function importData(file) {
       skippedCount++
     } else {
       const { id: oldId, ...rest } = q
-      const newId = await db.quizzes.add({
-        ...rest,
+      const docRef = await addDoc(quizzesRef(uid), {
+        question: rest.question,
+        answer: rest.answer,
+        category: rest.category ?? '',
         excluded: rest.excluded ?? false,
         createdAt: rest.createdAt ?? Date.now(),
         lastReviewedAt: rest.lastReviewedAt ?? null,
         answerHighlights: rest.answerHighlights ?? [],
       })
-      idMap[oldId] = newId
+      idMap[oldId] = docRef.id
       existingSet.add(key)
       addedCount++
     }
@@ -107,18 +162,18 @@ export async function importData(file) {
 
   let recordsAdded = 0
   if (payload.records && Array.isArray(payload.records)) {
-    const existingRecords = await db.records.toArray()
-    const existingRecordSet = new Set(
-      existingRecords.map(r => `${r.quizId}||${r.date}||${r.isCorrect}`)
-    )
+    const existingRecSnap = await getDocs(recordsRef(uid))
+    const existingRecords = existingRecSnap.docs.map(d => d.data())
+    const existingRecordSet = new Set(existingRecords.map(r => `${r.quizId}||${r.date}||${r.isCorrect}`))
+
     for (const r of payload.records) {
       const newQuizId = idMap[r.quizId]
       if (!newQuizId) continue
       const key = `${newQuizId}||${r.date}||${r.isCorrect}`
       if (!existingRecordSet.has(key)) {
         // eslint-disable-next-line no-unused-vars
-        const { id, ...rest } = r
-        await db.records.add({ ...rest, quizId: newQuizId })
+        const { id, reviewDate, ...rest } = r
+        await addDoc(recordsRef(uid), { ...rest, quizId: newQuizId, isReview: rest.isReview ?? false })
         existingRecordSet.add(key)
         recordsAdded++
       }
