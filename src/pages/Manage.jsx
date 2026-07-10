@@ -1,7 +1,5 @@
 import { useState, useRef } from 'react'
-import { useAuth } from '../contexts/AuthContext'
-import { useCollection } from '../hooks/useCollection'
-import { addQuiz, updateQuiz, deleteQuiz, exportFirestoreData, importFirestoreData } from '../db'
+import { useData } from '../contexts/DataContext'
 import { renderWithHighlights, mergeHighlights } from '../highlightUtils.jsx'
 
 function CategoryInput({ value, onChange, existingCategories }) {
@@ -183,8 +181,7 @@ function QuizForm({ initial, onSave, onCancel, existingCategories, lastCategory 
 }
 
 export default function Manage() {
-  const user = useAuth()
-  const rawQuizzes = useCollection(`users/${user.uid}/quizzes`)
+  const { quizzes: rawQuizzes, addQuiz, updateQuiz, deleteQuiz, exportData, importData } = useData()
   // 최신순 정렬
   const quizzes = rawQuizzes ? [...rawQuizzes].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) : undefined
 
@@ -218,10 +215,10 @@ export default function Manage() {
 
   async function handleSave({ question, answer, category, answerHighlights }) {
     if (editTarget) {
-      await updateQuiz(user.uid, editTarget.id, { question, answer, category, answerHighlights: answerHighlights ?? [] })
+      await updateQuiz(editTarget.id, { question, answer, category, answerHighlights: answerHighlights ?? [] })
       setEditTarget(null)
     } else {
-      await addQuiz(user.uid, { question, answer, category, excluded: false, createdAt: Date.now(), answerHighlights: answerHighlights ?? [] })
+      await addQuiz({ question, answer, category, excluded: false, createdAt: Date.now(), answerHighlights: answerHighlights ?? [] })
       setLastCategory(category)
       setShowForm(false)
     }
@@ -229,16 +226,16 @@ export default function Manage() {
 
   async function handleDelete(id) {
     if (!confirm('이 문제를 삭제할까요?')) return
-    await deleteQuiz(user.uid, id)
+    await deleteQuiz(id)
   }
 
   async function handleToggleExclude(q) {
-    await updateQuiz(user.uid, q.id, { excluded: !q.excluded })
+    await updateQuiz(q.id, { excluded: !q.excluded })
   }
 
   async function handleExport() {
     try {
-      await exportFirestoreData(user.uid)
+      await exportData()
     } catch (e) {
       alert('내보내기 실패: ' + e.message)
     }
@@ -250,7 +247,7 @@ export default function Manage() {
     setImporting(true)
     setImportMsg(null)
     try {
-      const result = await importFirestoreData(user.uid, file)
+      const result = await importData(file)
       setImportMsg({
         type: 'success',
         text: `완료! 새 문제 ${result.addedCount}개 추가, 중복 ${result.skippedCount}개 건너뜀, 기록 ${result.recordsAdded}개 추가`

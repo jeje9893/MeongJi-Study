@@ -5,12 +5,14 @@ import Manage from './pages/Manage'
 import History from './pages/History'
 import AuthGate from './components/AuthGate'
 import MigrationWizard from './components/MigrationWizard'
+import { DataProvider } from './contexts/DataContext'
 import './App.css'
 
 function App() {
   return (
     <BrowserRouter>
       <AuthGate>
+        <DataProvider>
         <MigrationWizard>
           <div className="app">
             <main className="main-content">
@@ -41,6 +43,7 @@ function App() {
             </nav>
           </div>
         </MigrationWizard>
+        </DataProvider>
       </AuthGate>
     </BrowserRouter>
   )

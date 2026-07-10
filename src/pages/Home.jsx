@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signOut } from 'firebase/auth'
+import { signOut, signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
 import { auth } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
-import { useCollection } from '../hooks/useCollection'
+import { useData } from '../contexts/DataContext'
 import changelogEntries from '../changelog'
 
 const gitInfo = __GIT_INFO__
@@ -49,8 +49,7 @@ function getBannerContent() {
 export default function Home() {
   const navigate = useNavigate()
   const user = useAuth()
-  const quizzes = useCollection(`users/${user.uid}/quizzes`)
-  const records = useCollection(`users/${user.uid}/records`)
+  const { quizzes, records } = useData()
 
   const bannerContent = getBannerContent()
   const [updateState, setUpdateState] = useState('idle') // 'idle' | 'checking' | 'latest'
@@ -129,29 +128,48 @@ export default function Home() {
           </p>
           <h1 className="page-title">나만의 퀴즈 📚</h1>
         </div>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 0,
-          background: 'var(--bg2)', border: '1px solid var(--bg3)',
-          borderRadius: 100, overflow: 'hidden', flexShrink: 0, marginTop: 6,
-        }}>
-          <span style={{
-            fontSize: 12, color: 'var(--text2)', padding: '6px 12px',
-            maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        {user ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 0,
+            background: 'var(--bg2)', border: '1px solid var(--bg3)',
+            borderRadius: 100, overflow: 'hidden', flexShrink: 0, marginTop: 6,
           }}>
-            {user.email}
-          </span>
+            <span style={{
+              fontSize: 12, color: 'var(--text2)', padding: '6px 12px',
+              maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {user.email}
+            </span>
+            <button
+              onClick={() => signOut(auth)}
+              style={{
+                fontSize: 12, color: '#93c5fd',
+                background: 'rgba(99,179,237,0.1)',
+                border: 'none', borderLeft: '1px solid var(--bg3)',
+                padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}
+            >
+              로그아웃
+            </button>
+          </div>
+        ) : (
           <button
-            onClick={() => signOut(auth)}
+            onClick={async () => {
+              try { await signInWithPopup(auth, new GoogleAuthProvider()) }
+              catch (e) { if (e.code !== 'auth/popup-closed-by-user') alert('로그인 실패: ' + e.message) }
+            }}
             style={{
               fontSize: 12, color: '#93c5fd',
               background: 'rgba(99,179,237,0.1)',
-              border: 'none', borderLeft: '1px solid var(--bg3)',
-              padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              border: '1px solid rgba(99,179,237,0.2)',
+              borderRadius: 100, padding: '6px 14px',
+              cursor: 'pointer', fontFamily: 'inherit',
+              whiteSpace: 'nowrap', flexShrink: 0, marginTop: 6,
             }}
           >
-            로그아웃
+            Google로 로그인
           </button>
-        </div>
+        )}
       </div>
 
       {/* 업데이트 배너 (상시 표시, 버튼 내장) */}

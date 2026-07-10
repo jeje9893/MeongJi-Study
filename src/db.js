@@ -182,3 +182,125 @@ export async function importFirestoreData(uid, file) {
 
   return { addedCount, skippedCount, recordsAdded }
 }
+
+// ── 오프라인(Dexie) CRUD 헬퍼 ──────────────────────────────────────────────
+
+export async function addQuizOffline(data) {
+  const id = await dexieDb.quizzes.add({
+    question: data.question,
+    answer: data.answer,
+    category: data.category ?? '',
+    excluded: data.excluded ?? false,
+    createdAt: data.createdAt ?? Date.now(),
+    lastReviewedAt: data.lastReviewedAt ?? null,
+    answerHighlights: data.answerHighlights ?? [],
+  })
+  return { id: String(id) }
+}
+
+export async function updateQuizOffline(quizId, data) {
+  return dexieDb.quizzes.update(Number(quizId), data)
+}
+
+export async function deleteQuizOffline(quizId) {
+  await dexieDb.quizzes.delete(Number(quizId))
+  await dexieDb.records.where('quizId').equals(Number(quizId)).delete()
+}
+
+export async function addRecordOffline(data) {
+  const id = await dexieDb.records.add({
+    quizId: Number(data.quizId),
+    date: data.date,
+    isCorrect: data.isCorrect,
+    isReview: data.isReview ?? false,
+  })
+  return { id: String(id) }
+}
+
+export async function deleteRecordOffline(recordId) {
+  return dexieDb.records.delete(Number(recordId))
+}
+
+export async function bulkDeleteRecordsOffline(ids) {
+  return dexieDb.records.bulkDelete(ids.map(Number))
+}
+
+export async function exportOfflineData() {
+  const [quizzes, records] = await Promise.all([
+    dexieDb.quizzes.toArray(),
+    dexieDb.records.toArray(),
+  ])
+  const payload = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    quizzes: quizzes.map(q => ({ ...q, id: String(q.id) })),
+    records: records.map(r => ({ ...r, id: String(r.id), quizId: String(r.quizId) })),
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `meongji-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function importOfflineData(file) {
+  const text = await file.text()
+  const payload = JSON.parse(text)
+  if (!payload.quizzes || !Array.isArray(payload.quizzes))
+    throw new Error('올바른 백업 파일이 아니에요')
+
+  const existingQuizzes = await dexieDb.quizzes.toArray()
+  const existingSet = new Set(existingQuizzes.map(q => `${q.question}||${q.answer}`))
+  const idMap = {}
+  let addedCount = 0
+  let skippedCount = 0
+
+  for (const q of payload.quizzes) {
+    const key = `${q.question}||${q.answer}`
+    if (existingSet.has(key)) {
+      const ex = existingQuizzes.find(e => `${e.question}||${e.answer}` === key)
+      if (ex) idMap[q.id] = String(ex.id)
+      skippedCount++
+    } else {
+      const { id: oldId, ...rest } = q
+      const newId = await dexieDb.quizzes.add({
+        question: rest.question, answer: rest.answer,
+        category: rest.category ?? '', excluded: rest.excluded ?? false,
+        createdAt: rest.createdAt ?? Date.now(),
+        lastReviewedAt: rest.lastReviewedAt ?? null,
+        answerHighlights: rest.answerHighlights ?? [],
+      })
+      idMap[oldId] = String(newId)
+      existingSet.add(key)
+      addedCount++
+    }
+  }
+
+  let recordsAdded = 0
+  if (Array.isArray(payload.records)) {
+    const existingRecords = await dexieDb.records.toArray()
+    const existingRecordSet = new Set(
+      existingRecords.map(r => `${r.quizId}||${r.date}||${r.isCorrect}`)
+    )
+    for (const r of payload.records) {
+      const newQuizId = idMap[r.quizId]
+      if (!newQuizId) continue
+      const key = `${newQuizId}||${r.date}||${r.isCorrect}`
+      if (!existingRecordSet.has(key)) {
+        // eslint-disable-next-line no-unused-vars
+        const { id, ...rest } = r
+        await dexieDb.records.add({
+          ...rest,
+          quizId: Number(newQuizId),
+          isReview: rest.isReview ?? false,
+        })
+        existingRecordSet.add(key)
+        recordsAdded++
+      }
+    }
+  }
+
+  return { addedCount, skippedCount, recordsAdded }
+}

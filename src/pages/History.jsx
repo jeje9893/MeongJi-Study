@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
-import { useCollection } from '../hooks/useCollection'
-import { addRecord, bulkDeleteRecords } from '../db'
+import { useData } from '../contexts/DataContext'
 
 const TODAY = new Date().toISOString().slice(0, 10)
 
@@ -18,7 +16,7 @@ function formatDate(dateStr) {
 }
 
 // 복습 세션 플레이어
-function ReviewPlayer({ quizzes, sessionDate, onDone, uid }) {
+function ReviewPlayer({ quizzes, sessionDate, onDone, addRecord }) {
   const [idx, setIdx] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [results, setResults] = useState([])
@@ -26,7 +24,7 @@ function ReviewPlayer({ quizzes, sessionDate, onDone, uid }) {
   const current = quizzes[idx]
 
   async function handleAnswer(isCorrect) {
-    await addRecord(uid, { quizId: current.id, date: TODAY, isCorrect, isReview: true })
+    await addRecord({ quizId: current.id, date: TODAY, isCorrect, isReview: true })
 
     const newResults = [...results, { quiz: current, isCorrect }]
     setResults(newResults)
@@ -114,9 +112,7 @@ function ReviewResult({ results, onBack }) {
 }
 
 export default function History() {
-  const user = useAuth()
-  const records = useCollection(`users/${user.uid}/records`)
-  const quizzes = useCollection(`users/${user.uid}/quizzes`)
+  const { records, quizzes, addRecord, bulkDeleteRecords } = useData()
 
   const [reviewSession, setReviewSession] = useState(null)
   const [reviewResults, setReviewResults] = useState(null)
@@ -179,7 +175,7 @@ export default function History() {
   async function handleDeleteDate(date, recs) {
     if (!confirm(`${formatDate(date)} 기록을 삭제할까요?`)) return
     const ids = recs.map(r => r.id)
-    await bulkDeleteRecords(user.uid, ids)
+    await bulkDeleteRecords(ids)
   }
 
   function handleReviewDone(results) {
@@ -193,7 +189,7 @@ export default function History() {
         quizzes={reviewSession.quizzes}
         sessionDate={reviewSession.date}
         onDone={handleReviewDone}
-        uid={user.uid}
+        addRecord={addRecord}
       />
     )
   }

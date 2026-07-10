@@ -1,5 +1,4 @@
 import { useAuth } from '../contexts/AuthContext'
-import Login from '../pages/Login'
 
 export default function AuthGate({ children }) {
   const user = useAuth()
@@ -12,8 +11,6 @@ export default function AuthGate({ children }) {
       로딩 중...
     </div>
   )
-
-  if (user === null) return <Login />
 
   return children
 }

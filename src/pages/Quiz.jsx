@@ -1,8 +1,6 @@
 import { useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { useCollection } from '../hooks/useCollection'
-import { addRecord, deleteRecord, updateQuiz } from '../db'
+import { useData } from '../contexts/DataContext'
 import { renderWithHighlights, mergeHighlights, getSelectionOffsets } from '../highlightUtils.jsx'
 
 function getDateMonthAgo() {
@@ -214,9 +212,7 @@ export default function Quiz() {
   const [searchParams, setSearchParams] = useSearchParams()
   const isReviewMode = searchParams.get('mode') === 'review'
 
-  const user = useAuth()
-  const quizzes = useCollection(`users/${user.uid}/quizzes`)
-  const allRecords = useCollection(`users/${user.uid}/records`)
+  const { quizzes, records: allRecords, addRecord, deleteRecord, updateQuiz } = useData()
 
   const [phase, setPhase] = useState('setup')   // setup | playing | done
   const [sessionQuizzes, setSessionQuizzes] = useState([])
@@ -298,7 +294,7 @@ export default function Quiz() {
     const prevQuiz = sessionQuizzes[idx - 1]
     const prevResult = results.find(r => r.quiz.id === prevQuiz.id)
     if (prevResult?.recordId != null) {
-      await deleteRecord(user.uid, prevResult.recordId)
+      await deleteRecord(prevResult.recordId)
     }
     setResults(prev => prev.filter(r => r.quiz.id !== prevQuiz.id))
     setHighlightMode(false)
@@ -309,7 +305,7 @@ export default function Quiz() {
   async function handleAnswer(isCorrect) {
     const current = sessionQuizzes[idx]
     const today = new Date().toISOString().slice(0, 10)
-    const docRef = await addRecord(user.uid, { quizId: current.id, date: today, isCorrect })
+    const docRef = await addRecord({ quizId: current.id, date: today, isCorrect })
     setResults(prev => [...prev, { quiz: current, isCorrect, recordId: docRef.id }])
     if (!isCorrect) {
       setQuizHighlights(current.answerHighlights || [])
@@ -334,7 +330,7 @@ export default function Quiz() {
 
   async function handleHighlightDone() {
     const current = sessionQuizzes[idx]
-    await updateQuiz(user.uid, current.id, { answerHighlights: quizHighlights })
+    await updateQuiz(current.id, { answerHighlights: quizHighlights })
     setSessionQuizzes(prev =>
       prev.map(q => q.id === current.id ? { ...q, answerHighlights: quizHighlights } : q)
     )
