@@ -57,6 +57,19 @@ export default function MigrationWizard({ children }) {
     )
   }
 
+  async function handleDeleteSelected() {
+    if (!confirm(`선택한 ${selectedIds.size}개의 문제를 삭제할까요?`)) return
+    const toDelete = localData.newQuizzes.filter(q => selectedIds.has(q.id))
+    await dexieDb.quizzes.bulkDelete(toDelete.map(q => q.id))
+    for (const q of toDelete) {
+      await dexieDb.records.where('quizId').equals(q.id).delete()
+    }
+    const remaining = localData.newQuizzes.filter(q => !selectedIds.has(q.id))
+    if (remaining.length === 0) { setState('done'); return }
+    setLocalData(prev => ({ ...prev, newQuizzes: remaining }))
+    setSelectedIds(new Set())
+  }
+
   function handleMigrateClick() {
     const hasUnchecked = localData.newQuizzes.some(q => !selectedIds.has(q.id))
     if (hasUnchecked) {
@@ -221,9 +234,21 @@ export default function MigrationWizard({ children }) {
               onClick={e => e.stopPropagation()}
               style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
             />
-            <span style={{ fontSize: 13, color: 'var(--text2)' }}>
+            <span style={{ fontSize: 13, color: 'var(--text2)', flex: 1 }}>
               전체 선택 ({selectedIds.size}/{localData?.newQuizzes.length})
             </span>
+            <button
+              onClick={e => { e.stopPropagation(); handleDeleteSelected() }}
+              disabled={selectedIds.size === 0}
+              style={{
+                padding: '3px 10px', borderRadius: 100, border: 'none', cursor: selectedIds.size === 0 ? 'default' : 'pointer',
+                fontSize: 12, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                background: selectedIds.size === 0 ? 'transparent' : 'rgba(248,113,113,0.15)',
+                color: selectedIds.size === 0 ? 'var(--bg3)' : 'var(--danger)',
+              }}
+            >
+              삭제
+            </button>
           </div>
 
           {/* 퀴즈 목록 */}
