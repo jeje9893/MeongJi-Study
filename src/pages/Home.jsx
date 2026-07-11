@@ -121,24 +121,23 @@ export default function Home() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-        <div>
-          <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 4 }}>
-            {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-          </p>
-          <h1 className="page-title">나만의 퀴즈 📚</h1>
-        </div>
+      <h1 className="page-title" style={{ textAlign: 'center', marginBottom: 8 }}>나만의 퀴즈 📚</h1>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <p style={{ color: 'var(--text2)', fontSize: 14, margin: 0 }}>
+          {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
+        </p>
         {user ? (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 0,
             background: 'var(--bg2)', border: '1px solid var(--bg3)',
-            borderRadius: 100, overflow: 'hidden', flexShrink: 0, marginTop: 6,
+            borderRadius: 100, overflow: 'hidden', flexShrink: 0,
           }}>
             <span style={{
               fontSize: 12, color: 'var(--text2)', padding: '6px 12px',
               maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
-              {user.email}
+              {user.displayName || user.email}
             </span>
             <button
               onClick={() => signOut(auth)}
@@ -164,7 +163,7 @@ export default function Home() {
               border: '1px solid rgba(99,179,237,0.2)',
               borderRadius: 100, padding: '6px 14px',
               cursor: 'pointer', fontFamily: 'inherit',
-              whiteSpace: 'nowrap', flexShrink: 0, marginTop: 6,
+              whiteSpace: 'nowrap', flexShrink: 0,
             }}
           >
             Google로 로그인
