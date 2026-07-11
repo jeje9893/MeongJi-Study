@@ -121,12 +121,8 @@ export default function Home() {
 
   return (
     <div>
-      <h1 className="page-title" style={{ textAlign: 'center', marginBottom: 8 }}>나만의 퀴즈 📚</h1>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <p style={{ color: 'var(--text2)', fontSize: 14, margin: 0 }}>
-          {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <h1 className="page-title" style={{ margin: 0 }}>나만의 퀴즈 📚</h1>
         {user ? (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 0,
@@ -170,6 +166,9 @@ export default function Home() {
           </button>
         )}
       </div>
+      <p style={{ color: 'var(--text2)', fontSize: 14, margin: '0 0 12px' }}>
+        {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
+      </p>
 
       {/* 업데이트 배너 (상시 표시, 버튼 내장) */}
       {bannerContent && (
