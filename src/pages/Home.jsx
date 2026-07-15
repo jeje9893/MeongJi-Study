@@ -38,16 +38,28 @@ function getMonthAgo() {
 
 function getBannerContent(firestoreBanner) {
   if (firestoreBanner?.text) {
-    return { text: firestoreBanner.text, date: firestoreBanner.date }
+    return {
+      text: firestoreBanner.text,
+      date: firestoreBanner.date,
+      fontSize: firestoreBanner.fontSize ?? 13,
+      color: firestoreBanner.color ?? 'var(--text2)',
+    }
   }
   if (changelogEntries.length > 0) {
     const latest = changelogEntries[0]
-    return { text: latest.text, date: latest.date }
+    return { text: latest.text, date: latest.date, fontSize: 13, color: 'var(--text2)' }
   }
   if (gitInfo.message) {
-    return { text: gitInfo.message, date: gitInfo.date }
+    return { text: gitInfo.message, date: gitInfo.date, fontSize: 13, color: 'var(--text2)' }
   }
   return null
+}
+
+const swatchBtnStyle = {
+  width: 24, height: 24, borderRadius: 6, border: '1px solid rgba(99,179,237,0.3)',
+  background: 'rgba(99,179,237,0.1)', color: '#93c5fd', fontSize: 14,
+  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  fontFamily: 'inherit', flexShrink: 0, padding: 0,
 }
 
 export default function Home() {
@@ -58,6 +70,8 @@ export default function Home() {
   const [firestoreBanner, setFirestoreBanner] = useState(undefined)
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState('')
+  const [editFontSize, setEditFontSize] = useState(13)
+  const [editColor, setEditColor] = useState('var(--text2)')
   const [updateState, setUpdateState] = useState('idle') // 'idle' | 'checking' | 'latest'
   const isAdmin = user?.email === 'jeje9893@gmail.com'
 
@@ -74,7 +88,7 @@ export default function Home() {
     if (!text) {
       await deleteDoc(doc(firestoreDb, 'config/banner'))
     } else {
-      await setDoc(doc(firestoreDb, 'config/banner'), { text, date: today })
+      await setDoc(doc(firestoreDb, 'config/banner'), { text, date: today, fontSize: editFontSize, color: editColor })
     }
     setIsEditing(false)
   }
@@ -228,10 +242,50 @@ export default function Home() {
                       fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical',
                     }}
                   />
+                  {/* 글자 크기 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap' }}>크기</span>
+                    <button onClick={() => setEditFontSize(s => Math.max(10, s - 1))} style={swatchBtnStyle}>−</button>
+                    <input
+                      type="number" value={editFontSize} min={10} max={40}
+                      onChange={e => setEditFontSize(Math.min(40, Math.max(10, Number(e.target.value))))}
+                      style={{
+                        width: 40, textAlign: 'center', background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(99,179,237,0.3)', borderRadius: 6,
+                        color: 'var(--text)', fontSize: 12, padding: '3px 4px', fontFamily: 'inherit',
+                      }}
+                    />
+                    <button onClick={() => setEditFontSize(s => Math.min(40, s + 1))} style={swatchBtnStyle}>+</button>
+                    <span style={{ fontSize: editFontSize, color: editColor, marginLeft: 4, lineHeight: 1 }}>가</span>
+                  </div>
+                  {/* 색상 스와치 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap' }}>색상</span>
+                    {[
+                      { label: '기본', value: 'var(--text2)' },
+                      { label: '흰색', value: 'var(--text)' },
+                      { label: '초록', value: 'var(--accent)' },
+                      { label: '노랑', value: 'var(--warning)' },
+                      { label: '빨강', value: 'var(--danger)' },
+                      { label: '파랑', value: '#93c5fd' },
+                    ].map(({ label, value }) => (
+                      <button
+                        key={value}
+                        title={label}
+                        onClick={() => setEditColor(value)}
+                        style={{
+                          width: 20, height: 20, borderRadius: '50%',
+                          background: value, border: 'none', cursor: 'pointer', flexShrink: 0,
+                          outline: editColor === value ? '2px solid white' : '2px solid transparent',
+                          outlineOffset: 1,
+                        }}
+                      />
+                    ))}
+                  </div>
                   <button
                     onClick={handleSaveBanner}
                     style={{
-                      marginTop: 8, padding: '4px 14px', borderRadius: 100,
+                      marginTop: 10, padding: '4px 14px', borderRadius: 100,
                       background: 'rgba(99,179,237,0.2)', border: '1px solid rgba(99,179,237,0.4)',
                       color: '#93c5fd', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
                     }}
@@ -240,7 +294,7 @@ export default function Home() {
                   </button>
                 </>
               ) : (
-                <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>
+                <div style={{ fontSize: bannerContent.fontSize, color: bannerContent.color, lineHeight: 1.5 }}>
                   {bannerContent.text}
                 </div>
               )}
@@ -248,7 +302,12 @@ export default function Home() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
               {isAdmin && (
                 <button
-                  onClick={() => { setEditText(firestoreBanner?.text ?? ''); setIsEditing(e => !e) }}
+                  onClick={() => {
+                    setEditText(firestoreBanner?.text ?? '')
+                    setEditFontSize(firestoreBanner?.fontSize ?? 13)
+                    setEditColor(firestoreBanner?.color ?? 'var(--text2)')
+                    setIsEditing(e => !e)
+                  }}
                   style={{
                     width: 36, height: 36, borderRadius: 8,
                     border: '1px solid rgba(99,179,237,0.3)',
