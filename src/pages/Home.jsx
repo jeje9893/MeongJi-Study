@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut, signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
-import { auth } from '../firebase'
+import { onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore'
+import { auth, firestoreDb } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import changelogEntries from '../changelog'
@@ -35,7 +36,10 @@ function getMonthAgo() {
   return d.toISOString().slice(0, 10)
 }
 
-function getBannerContent() {
+function getBannerContent(firestoreBanner) {
+  if (firestoreBanner?.text) {
+    return { text: firestoreBanner.text, date: firestoreBanner.date }
+  }
   if (changelogEntries.length > 0) {
     const latest = changelogEntries[0]
     return { text: latest.text, date: latest.date }
@@ -51,8 +55,29 @@ export default function Home() {
   const user = useAuth()
   const { quizzes, records } = useData()
 
-  const bannerContent = getBannerContent()
+  const [firestoreBanner, setFirestoreBanner] = useState(undefined)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editText, setEditText] = useState('')
   const [updateState, setUpdateState] = useState('idle') // 'idle' | 'checking' | 'latest'
+  const isAdmin = user?.email === 'jeje9893@gmail.com'
+
+  useEffect(() => {
+    return onSnapshot(doc(firestoreDb, 'config/banner'), snap => {
+      setFirestoreBanner(snap.exists() ? snap.data() : null)
+    })
+  }, [])
+
+  const bannerContent = getBannerContent(firestoreBanner)
+
+  async function handleSaveBanner() {
+    const text = editText.trim()
+    if (!text) {
+      await deleteDoc(doc(firestoreDb, 'config/banner'))
+    } else {
+      await setDoc(doc(firestoreDb, 'config/banner'), { text, date: today })
+    }
+    setIsEditing(false)
+  }
 
   async function handleCheckUpdate() {
     if (updateState === 'checking') return
@@ -180,8 +205,8 @@ export default function Home() {
             border: '1px solid rgba(99,179,237,0.3)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>🆕</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ fontSize: 22, lineHeight: 1, flexShrink: 0, marginTop: 2 }}>🆕</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, color: '#93c5fd', marginBottom: 3, fontSize: 13 }}>
                 업데이트
@@ -189,29 +214,70 @@ export default function Home() {
                   <span style={{ fontWeight: 400, color: 'var(--text2)', marginLeft: 8 }}>{bannerContent.date}</span>
                 )}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>
-                {bannerContent.text}
-              </div>
+              {isEditing ? (
+                <>
+                  <textarea
+                    value={editText}
+                    onChange={e => setEditText(e.target.value)}
+                    placeholder="빈칸으로 저장하면 기본 배너(커밋/changelog)로 돌아갑니다"
+                    rows={3}
+                    style={{
+                      width: '100%', background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid rgba(99,179,237,0.4)', borderRadius: 8,
+                      color: 'var(--text)', fontSize: 13, padding: '8px',
+                      fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical',
+                    }}
+                  />
+                  <button
+                    onClick={handleSaveBanner}
+                    style={{
+                      marginTop: 8, padding: '4px 14px', borderRadius: 100,
+                      background: 'rgba(99,179,237,0.2)', border: '1px solid rgba(99,179,237,0.4)',
+                      color: '#93c5fd', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    저장
+                  </button>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5 }}>
+                  {bannerContent.text}
+                </div>
+              )}
             </div>
-            <button
-              onClick={handleCheckUpdate}
-              disabled={updateState === 'checking'}
-              style={{
-                flexShrink: 0,
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                border: '1px solid rgba(99,179,237,0.3)',
-                background: updateState === 'latest' ? 'rgba(110,231,183,0.15)' : 'rgba(99,179,237,0.1)',
-                fontSize: 22,
-                cursor: updateState === 'checking' ? 'default' : 'pointer',
-                opacity: updateState === 'checking' ? 0.4 : 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-              title={updateState === 'latest' ? '최신 버전입니다' : '업데이트 확인'}
-            >
-              {updateState === 'latest' ? '✅' : '🔄'}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+              {isAdmin && (
+                <button
+                  onClick={() => { setEditText(firestoreBanner?.text ?? ''); setIsEditing(e => !e) }}
+                  style={{
+                    width: 36, height: 36, borderRadius: 8,
+                    border: '1px solid rgba(99,179,237,0.3)',
+                    background: isEditing ? 'rgba(99,179,237,0.25)' : 'rgba(99,179,237,0.05)',
+                    fontSize: 15, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                  title={isEditing ? '취소' : '배너 편집'}
+                >
+                  {isEditing ? '✕' : '✏️'}
+                </button>
+              )}
+              <button
+                onClick={handleCheckUpdate}
+                disabled={updateState === 'checking'}
+                style={{
+                  width: 36, height: 36, borderRadius: 8,
+                  border: '1px solid rgba(99,179,237,0.3)',
+                  background: updateState === 'latest' ? 'rgba(110,231,183,0.15)' : 'rgba(99,179,237,0.1)',
+                  fontSize: 18,
+                  cursor: updateState === 'checking' ? 'default' : 'pointer',
+                  opacity: updateState === 'checking' ? 0.4 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+                title={updateState === 'latest' ? '최신 버전입니다' : '업데이트 확인'}
+              >
+                {updateState === 'latest' ? '✅' : '🔄'}
+              </button>
+            </div>
           </div>
         </div>
       )}
