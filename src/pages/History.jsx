@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../contexts/DataContext'
+import { downloadAnalysis } from '../analysisExport'
 
 const TODAY = new Date().toISOString().slice(0, 10)
 
@@ -116,6 +117,7 @@ export default function History() {
 
   const [reviewSession, setReviewSession] = useState(null)
   const [reviewResults, setReviewResults] = useState(null)
+  const [showAnalysisPanel, setShowAnalysisPanel] = useState(false)
 
   if (!records || !quizzes) return null
 
@@ -183,6 +185,14 @@ export default function History() {
     setReviewSession(null)
   }
 
+  function handleExportAnalysis(format) {
+    try {
+      downloadAnalysis(quizzes, records, format)
+    } catch (e) {
+      alert('내보내기 실패: ' + e.message)
+    }
+  }
+
   if (reviewSession) {
     return (
       <ReviewPlayer
@@ -214,7 +224,43 @@ export default function History() {
 
   return (
     <div>
-      <h1 className="page-title">복습</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h1 className="page-title" style={{ marginBottom: 0 }}>복습</h1>
+        <button
+          className="btn btn-secondary"
+          style={{ width: 'auto', padding: '8px 14px', fontSize: 13 }}
+          onClick={() => setShowAnalysisPanel(v => !v)}
+        >
+          {showAnalysisPanel ? '닫기' : '📊 분석'}
+        </button>
+      </div>
+
+      {/* AI 분석용 풀이기록 내보내기 패널 */}
+      {showAnalysisPanel && (
+        <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(110,231,183,0.2)' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>AI 분석용 내보내기</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
+            풀이 기록을 AI 분석용으로 내보냅니다.<br />
+            문제별 정답률·틀린 횟수·시도 이력이 포함돼요.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => handleExportAnalysis('json')}
+              style={{ fontSize: 14 }}
+            >
+              📥 JSON 내보내기
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => handleExportAnalysis('markdown')}
+              style={{ fontSize: 14 }}
+            >
+              📄 마크다운 내보내기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 전체 통계 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 24 }}>

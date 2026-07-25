@@ -38,11 +38,19 @@ function getDateMonthAgo() {
 // }
 
 // 풀어본 횟수 기준 오름차순 정렬 후 선택 (안풀어본 → 적게 푼 순)
+// 정렬 전에 셔플 → 안정 정렬 특성상 같은 횟수(동점)끼리는 랜덤 순서가 유지된다
 function weightedSelect(pool, recordMap, count) {
-  const sorted = [...pool].sort((a, b) => {
+  const arr = [...pool]
+  // Fisher-Yates 셔플로 동점 랜덤화
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+
+  const sorted = arr.sort((a, b) => {
     const aCount = (recordMap[a.id] || []).length
     const bCount = (recordMap[b.id] || []).length
-    return aCount - bCount  // 적게 푼 문제가 앞으로
+    return aCount - bCount  // 적게 푼(안 푼) 문제가 앞으로
   })
 
   return sorted.slice(0, Math.min(count, sorted.length))

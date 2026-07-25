@@ -117,7 +117,7 @@ export async function exportFirestoreData(uid) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `meongji-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = `quiz-${new Date().toISOString().slice(0, 10)}.json`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -240,7 +240,7 @@ export async function exportOfflineData() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `meongji-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = `quiz-${new Date().toISOString().slice(0, 10)}.json`
   a.click()
   URL.revokeObjectURL(url)
 }
