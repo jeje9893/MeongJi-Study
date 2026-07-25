@@ -198,10 +198,12 @@ export default function Manage() {
   const fileInputRef = useRef()
 
   const categories = [...new Set((quizzes || []).map(q => q.category).filter(Boolean))]
+  const hasUncategorized = (quizzes || []).some(q => !q.category)
 
   const searchTerm = search.trim().toLowerCase()
   const baseFiltered = (quizzes || []).filter(q => {
-    if (filter && q.category !== filter) return false
+    if (filter === '__uncategorized__') { if (q.category) return false }
+    else if (filter && q.category !== filter) return false
     if (!searchTerm) return true
     if (searchScope === 'question') return q.question.toLowerCase().includes(searchTerm)
     if (searchScope === 'answer') return q.answer.toLowerCase().includes(searchTerm)
@@ -402,12 +404,15 @@ export default function Manage() {
       </div>
 
       {/* 카테고리 필터 */}
-      {categories.length > 0 && (
+      {(categories.length > 0 || hasUncategorized) && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button onClick={() => setFilter('')} style={{ padding: '4px 12px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 13, background: !filter ? 'var(--accent)' : 'var(--bg3)', color: !filter ? '#0f172a' : 'var(--text2)' }}>전체</button>
           {categories.map(c => (
             <button key={c} onClick={() => setFilter(c)} style={{ padding: '4px 12px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 13, background: filter === c ? 'var(--accent)' : 'var(--bg3)', color: filter === c ? '#0f172a' : 'var(--text2)' }}>{c}</button>
           ))}
+          {hasUncategorized && (
+            <button onClick={() => setFilter('__uncategorized__')} style={{ padding: '4px 12px', borderRadius: 100, border: 'none', cursor: 'pointer', fontSize: 13, background: filter === '__uncategorized__' ? 'var(--accent)' : 'var(--bg3)', color: filter === '__uncategorized__' ? '#0f172a' : 'var(--text2)' }}>미분류</button>
+          )}
         </div>
       )}
 
