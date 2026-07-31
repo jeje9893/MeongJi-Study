@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useData } from '../contexts/DataContext'
 import { renderWithHighlights, mergeHighlights, getSelectionOffsets } from '../highlightUtils.jsx'
+import QuizForm from '../components/QuizForm'
 
 function getDateMonthAgo() {
   const d = new Date()
@@ -228,6 +229,7 @@ export default function Quiz() {
   const [revealed, setRevealed] = useState(false)
   const [results, setResults] = useState([])
   const [highlightMode, setHighlightMode] = useState(false)
+  const [editMode, setEditMode] = useState(false)
   const [quizHighlights, setQuizHighlights] = useState([])
   const [pendingHighlight, setPendingHighlight] = useState(null)
   const answerRef = useRef()
@@ -289,6 +291,7 @@ export default function Quiz() {
 
   function advanceQuiz() {
     setHighlightMode(false)
+    setEditMode(false)
     if (idx + 1 >= sessionQuizzes.length) {
       setPhase('done')
     } else {
@@ -306,6 +309,7 @@ export default function Quiz() {
     }
     setResults(prev => prev.filter(r => r.quiz.id !== prevQuiz.id))
     setHighlightMode(false)
+    setEditMode(false)
     setIdx(idx - 1)
     setRevealed(false)
   }
@@ -345,6 +349,20 @@ export default function Quiz() {
     advanceQuiz()
   }
 
+  async function handleEditSave(data) {
+    const current = sessionQuizzes[idx]
+    await updateQuiz(current.id, {
+      question: data.question,
+      answer: data.answer,
+      category: data.category,
+      answerHighlights: data.answerHighlights ?? [],
+    })
+    setSessionQuizzes(prev =>
+      prev.map(q => q.id === current.id ? { ...q, ...data } : q)
+    )
+    setEditMode(false)
+  }
+
   // 복습 모드 + setup 단계 → 복습 시작 화면
   if (phase === 'setup' && isReviewMode && reviewQuizzes.length > 0) {
     return (
@@ -369,6 +387,7 @@ export default function Quiz() {
   )
 
   const current = sessionQuizzes[idx]
+  const categories = [...new Set(quizzes.map(q => q.category).filter(Boolean))]
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -405,6 +424,13 @@ export default function Quiz() {
             <button className="btn btn-secondary" onClick={advanceQuiz}>건너뛰기 →</button>
           </div>
         </div>
+      ) : editMode ? (
+        <QuizForm
+          initial={current}
+          existingCategories={categories}
+          onSave={handleEditSave}
+          onCancel={() => setEditMode(false)}
+        />
       ) : !highlightMode ? (
         <div>
           <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(110,231,183,0.3)', background: 'rgba(110,231,183,0.05)' }}>
@@ -413,6 +439,13 @@ export default function Quiz() {
               {renderWithHighlights(current.answer, current.answerHighlights)}
             </p>
           </div>
+          <button
+            className="btn btn-secondary"
+            style={{ marginBottom: 12 }}
+            onClick={() => setEditMode(true)}
+          >
+            ✏️ 문제 수정하기
+          </button>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <button className="btn" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--danger)' }} onClick={() => handleAnswer(false)}>❌ 틀렸어</button>
             <button className="btn" style={{ background: 'rgba(110,231,183,0.15)', color: 'var(--accent)' }} onClick={() => handleAnswer(true)}>✅ 맞았어</button>
