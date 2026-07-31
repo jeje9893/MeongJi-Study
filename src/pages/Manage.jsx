@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useData } from '../contexts/DataContext'
 import { renderWithHighlights, mergeHighlights } from '../highlightUtils.jsx'
+import QuizCalendar from '../components/QuizCalendar'
 
 function CategoryInput({ value, onChange, existingCategories }) {
   const [mode, setMode] = useState(() =>
@@ -181,9 +182,16 @@ function QuizForm({ initial, onSave, onCancel, existingCategories, lastCategory 
 }
 
 export default function Manage() {
-  const { quizzes: rawQuizzes, addQuiz, updateQuiz, deleteQuiz, exportData, importData } = useData()
+  const { quizzes: rawQuizzes, records, addQuiz, updateQuiz, deleteQuiz, exportData, importData } = useData()
   // 최신순 정렬
   const quizzes = rawQuizzes ? [...rawQuizzes].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) : undefined
+
+  // quizId별 풀이 기록 그룹핑 (달력 표시용)
+  const recordsByQuiz = useMemo(() => {
+    const m = {}
+    ;(records || []).forEach(r => { (m[r.quizId] ||= []).push(r) })
+    return m
+  }, [records])
 
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -447,7 +455,8 @@ export default function Manage() {
                 </div>
                 <div style={{ fontWeight: 500, marginBottom: 8, lineHeight: 1.6, marginTop: 8 }}>{q.question}</div>
                 <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>→ {renderWithHighlights(q.answer, q.answerHighlights)}</div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <QuizCalendar createdAt={q.createdAt} records={recordsByQuiz[q.id] || []} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                   <button className="btn btn-secondary" style={{ fontSize: 13, padding: '8px 14px' }} onClick={() => setEditTarget(q)}>수정</button>
                   <button className="btn btn-danger" style={{ fontSize: 13, padding: '8px 14px' }} onClick={() => handleDelete(q.id)}>삭제</button>
                 </div>
