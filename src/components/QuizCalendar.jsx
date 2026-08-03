@@ -118,11 +118,13 @@ export default function QuizCalendar({ createdAt, records }) {
   const addedMonth = addedDate ? addedDate.slice(0, 7) : null
 
   const { dayMap, monthAgg, activeMonths } = useMemo(() => {
+    // 접혀 있으면 집계하지 않는다 — 목록에 접힌 카드가 수백 개여도 비용 0
+    if (!open) return { dayMap: {}, monthAgg: {}, activeMonths: [] }
     const dm = buildDayMap(records)
     const ma = buildMonthAgg(records)
     const months = [...new Set([...(addedMonth ? [addedMonth] : []), ...Object.keys(ma)])].sort()
     return { dayMap: dm, monthAgg: ma, activeMonths: months }
-  }, [records, addedMonth])
+  }, [open, records, addedMonth])
 
   const currentMonth = new Date().toISOString().slice(0, 7)
   const effectiveMonth = viewMonth ?? activeMonths[activeMonths.length - 1] ?? currentMonth

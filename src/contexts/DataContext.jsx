@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from './AuthContext'
 import { useCollection } from '../hooks/useCollection'
@@ -23,15 +23,18 @@ export function DataProvider({ children }) {
   const dexieRecords = useLiveQuery(() => dexieDb.records.toArray(), [])
 
   // Dexie id는 숫자 → 문자열로 정규화해 Firestore 문자열 id와 인터페이스 통일
-  const quizzes = user
+  const quizzes = useMemo(() => user
     ? firestoreQuizzes
     : dexieQuizzes?.map(q => ({ ...q, id: String(q.id) }))
+  , [user, firestoreQuizzes, dexieQuizzes])
 
-  const records = user
+  const records = useMemo(() => user
     ? firestoreRecords
     : dexieRecords?.map(r => ({ ...r, id: String(r.id), quizId: String(r.quizId) }))
+  , [user, firestoreRecords, dexieRecords])
 
-  const ops = user
+  // ops는 user에만 의존 → 데이터가 바뀌어도 콜백 identity 안정 (소비자 memo 실효)
+  const ops = useMemo(() => user
     ? {
         addQuiz: d => addQuiz(user.uid, d),
         updateQuiz: (id, d) => updateQuiz(user.uid, id, d),
@@ -52,9 +55,12 @@ export function DataProvider({ children }) {
         exportData: () => exportOfflineData(),
         importData: file => importOfflineData(file),
       }
+  , [user])
+
+  const value = useMemo(() => ({ quizzes, records, ...ops }), [quizzes, records, ops])
 
   return (
-    <DataContext.Provider value={{ quizzes, records, ...ops }}>
+    <DataContext.Provider value={value}>
       {children}
     </DataContext.Provider>
   )
