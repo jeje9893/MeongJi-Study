@@ -304,8 +304,9 @@ export default function Quiz() {
     if (idx === 0) return
     const prevQuiz = sessionQuizzes[idx - 1]
     const prevResult = results.find(r => r.quiz.id === prevQuiz.id)
-    if (prevResult?.recordId != null) {
-      await deleteRecord(prevResult.recordId)
+    const rid = prevResult?.recordIdPromise ? await prevResult.recordIdPromise : null
+    if (rid != null) {
+      await deleteRecord(rid)
     }
     setResults(prev => prev.filter(r => r.quiz.id !== prevQuiz.id))
     setHighlightMode(false)
@@ -314,11 +315,14 @@ export default function Quiz() {
     setRevealed(false)
   }
 
-  async function handleAnswer(isCorrect) {
+  function handleAnswer(isCorrect) {
     const current = sessionQuizzes[idx]
     const today = new Date().toISOString().slice(0, 10)
-    const docRef = await addRecord({ quizId: current.id, date: today, isCorrect })
-    setResults(prev => [...prev, { quiz: current, isCorrect, recordId: docRef.id }])
+    // 기록 쓰기는 백그라운드로 — 전환을 막지 않는다. 되돌리기용 id는 promise로 보관
+    const recordIdPromise = addRecord({ quizId: current.id, date: today, isCorrect })
+      .then(ref => ref.id)
+      .catch(() => null)
+    setResults(prev => [...prev, { quiz: current, isCorrect, recordIdPromise }])
     if (!isCorrect) {
       setQuizHighlights(current.answerHighlights || [])
       setPendingHighlight(null)
