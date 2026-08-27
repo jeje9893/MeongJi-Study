@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut, signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
 import { onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore'
 import { auth, firestoreDb } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
+import { compressFileToDataUrl } from '../imageUtils'
 import changelogEntries from '../changelog'
 
 const gitInfo = __GIT_INFO__
@@ -37,20 +38,21 @@ function getMonthAgo() {
 }
 
 function getBannerContent(firestoreBanner) {
-  if (firestoreBanner?.text) {
+  if (firestoreBanner?.text || firestoreBanner?.image) {
     return {
-      text: firestoreBanner.text,
+      text: firestoreBanner.text ?? '',
       date: firestoreBanner.date,
       fontSize: firestoreBanner.fontSize ?? 13,
       color: firestoreBanner.color ?? 'var(--text2)',
+      image: firestoreBanner.image ?? null,
     }
   }
   if (changelogEntries.length > 0) {
     const latest = changelogEntries[0]
-    return { text: latest.text, date: latest.date, fontSize: 13, color: 'var(--text2)' }
+    return { text: latest.text, date: latest.date, fontSize: 13, color: 'var(--text2)', image: null }
   }
   if (gitInfo.message) {
-    return { text: gitInfo.message, date: gitInfo.date, fontSize: 13, color: 'var(--text2)' }
+    return { text: gitInfo.message, date: gitInfo.date, fontSize: 13, color: 'var(--text2)', image: null }
   }
   return null
 }
@@ -72,7 +74,9 @@ export default function Home() {
   const [editText, setEditText] = useState('')
   const [editFontSize, setEditFontSize] = useState(13)
   const [editColor, setEditColor] = useState('var(--text2)')
+  const [editImage, setEditImage] = useState(null) // 배너 이미지 dataURL | null
   const [updateState, setUpdateState] = useState('idle') // 'idle' | 'checking' | 'latest'
+  const bannerImageInputRef = useRef()
   const isAdmin = user?.email === 'jeje9893@gmail.com'
 
   useEffect(() => {
@@ -85,12 +89,26 @@ export default function Home() {
 
   async function handleSaveBanner() {
     const text = editText.trim()
-    if (!text) {
+    if (!text && !editImage) {
       await deleteDoc(doc(firestoreDb, 'config/banner'))
     } else {
-      await setDoc(doc(firestoreDb, 'config/banner'), { text, date: today, fontSize: editFontSize, color: editColor })
+      await setDoc(doc(firestoreDb, 'config/banner'), { text, image: editImage ?? null, date: today, fontSize: editFontSize, color: editColor })
     }
     setIsEditing(false)
+  }
+
+  async function handlePickBannerImage(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type?.startsWith('image/')) { alert('이미지 파일만 넣을 수 있어요'); return }
+    try {
+      const dataUrl = await compressFileToDataUrl(file, { maxDim: 900, quality: 0.75 })
+      if (dataUrl.length > 950000) { alert('이미지 용량이 너무 커요. 더 작은 이미지를 사용해주세요'); return }
+      setEditImage(dataUrl)
+    } catch (err) {
+      alert('이미지 처리 실패: ' + err.message)
+    }
   }
 
   async function handleCheckUpdate() {
@@ -282,6 +300,20 @@ export default function Home() {
                       />
                     ))}
                   </div>
+                  {/* 이미지 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap' }}>이미지</span>
+                    <input ref={bannerImageInputRef} type="file" accept="image/*" onChange={handlePickBannerImage} style={{ display: 'none' }} />
+                    {editImage ? (
+                      <>
+                        <img src={editImage} alt="" style={{ maxWidth: 96, maxHeight: 54, borderRadius: 6, objectFit: 'cover', background: 'rgba(0,0,0,0.3)' }} />
+                        <button onClick={() => bannerImageInputRef.current?.click()} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }}>변경</button>
+                        <button onClick={() => setEditImage(null)} style={swatchBtnStyle}>✕</button>
+                      </>
+                    ) : (
+                      <button onClick={() => bannerImageInputRef.current?.click()} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px' }}>🖼 추가</button>
+                    )}
+                  </div>
                   <button
                     onClick={handleSaveBanner}
                     style={{
@@ -294,9 +326,20 @@ export default function Home() {
                   </button>
                 </>
               ) : (
-                <div style={{ fontSize: bannerContent.fontSize, color: bannerContent.color, lineHeight: 1.5 }}>
-                  {bannerContent.text}
-                </div>
+                <>
+                  {bannerContent.text && (
+                    <div style={{ fontSize: bannerContent.fontSize, color: bannerContent.color, lineHeight: 1.5 }}>
+                      {bannerContent.text}
+                    </div>
+                  )}
+                  {bannerContent.image && (
+                    <img
+                      src={bannerContent.image}
+                      alt=""
+                      style={{ display: 'block', maxWidth: '100%', maxHeight: 220, borderRadius: 8, objectFit: 'contain', marginTop: bannerContent.text ? 8 : 0 }}
+                    />
+                  )}
+                </>
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
@@ -306,6 +349,7 @@ export default function Home() {
                     setEditText(firestoreBanner?.text ?? '')
                     setEditFontSize(firestoreBanner?.fontSize ?? 13)
                     setEditColor(firestoreBanner?.color ?? 'var(--text2)')
+                    setEditImage(firestoreBanner?.image ?? null)
                     setIsEditing(e => !e)
                   }}
                   style={{

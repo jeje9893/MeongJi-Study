@@ -35,6 +35,12 @@ function canvasToBlob(canvas, type, quality) {
   return new Promise(resolve => canvas.toBlob(resolve, type, quality))
 }
 
+// 파일을 압축해 data URL 문자열로 (배너 등 인라인 저장용)
+export async function compressFileToDataUrl(file, opts) {
+  const blob = await compressImage(file, opts)
+  return blobToDataUrl(blob)
+}
+
 // Blob → data URL(base64) 문자열
 export function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
