@@ -1,5 +1,42 @@
 import { useState, useRef } from 'react'
 import { renderWithHighlights, mergeHighlights } from '../highlightUtils.jsx'
+import { useImageSrc } from '../useImageSrc'
+
+const chipBtn = {
+  padding: '3px 10px', borderRadius: 100, border: '1px solid rgba(255,255,255,0.12)',
+  background: 'transparent', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+}
+
+// 이미지 필드 — value: null | {id}(기존) | {file}(새 선택). onChange로 상위에 전달.
+function ImageField({ value, onChange }) {
+  const inputRef = useRef()
+  const previewUrl = useImageSrc(value)
+
+  function handlePick(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type?.startsWith('image/')) { alert('이미지 파일만 넣을 수 있어요'); return }
+    onChange({ file })
+  }
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <input ref={inputRef} type="file" accept="image/*" onChange={handlePick} style={{ display: 'none' }} />
+      {previewUrl ? (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <img src={previewUrl} alt="" style={{ maxWidth: 160, maxHeight: 160, borderRadius: 8, objectFit: 'contain', background: 'var(--bg3)' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button type="button" onClick={() => inputRef.current?.click()} style={chipBtn}>이미지 변경</button>
+            <button type="button" onClick={() => onChange(null)} style={chipBtn}>제거</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => inputRef.current?.click()} style={chipBtn}>🖼 이미지 추가</button>
+      )}
+    </div>
+  )
+}
 
 function CategoryInput({ value, onChange, existingCategories }) {
   const [mode, setMode] = useState(() =>
@@ -76,12 +113,14 @@ function CategoryInput({ value, onChange, existingCategories }) {
 }
 
 // lastCategory: 직전 문제에서 쓴 카테고리를 이어받아 초기값으로 사용
-export default function QuizForm({ initial, onSave, onCancel, existingCategories, lastCategory }) {
+export default function QuizForm({ initial, onSave, onCancel, existingCategories, lastCategory, uploadImage }) {
   const [question, setQuestion] = useState(initial?.question || '')
   const [answer, setAnswer] = useState(initial?.answer || '')
   const [category, setCategory] = useState(initial?.category ?? lastCategory ?? '')
   const [highlights, setHighlights] = useState(initial?.answerHighlights || [])
   const [pendingSelection, setPendingSelection] = useState(null)
+  const [questionImage, setQuestionImage] = useState(initial?.questionImage || null)
+  const [answerImage, setAnswerImage] = useState(initial?.answerImage || null)
   const answerRef = useRef()
 
   function handleAnswerChange(e) {
@@ -106,7 +145,10 @@ export default function QuizForm({ initial, onSave, onCancel, existingCategories
   function handleSubmit(e) {
     e.preventDefault()
     if (!question.trim() || !answer.trim()) return
-    onSave({ question: question.trim(), answer: answer.trim(), category: category.trim(), answerHighlights: highlights })
+    onSave({
+      question: question.trim(), answer: answer.trim(), category: category.trim(),
+      answerHighlights: highlights, questionImage, answerImage,
+    })
   }
 
   return (
@@ -116,6 +158,7 @@ export default function QuizForm({ initial, onSave, onCancel, existingCategories
         <div className="form-group">
           <label>문제 *</label>
           <textarea className="input" placeholder="문제를 입력하세요" value={question} onChange={e => setQuestion(e.target.value)} />
+          {uploadImage && <ImageField value={questionImage} onChange={setQuestionImage} />}
         </div>
         <div className="form-group">
           <label>정답 *</label>
@@ -161,6 +204,7 @@ export default function QuizForm({ initial, onSave, onCancel, existingCategories
               </div>
             </div>
           )}
+          {uploadImage && <ImageField value={answerImage} onChange={setAnswerImage} />}
         </div>
         <div className="form-group">
           <label>카테고리 (선택)</label>

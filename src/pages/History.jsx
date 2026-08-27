@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useData } from '../contexts/DataContext'
 import { downloadAnalysis } from '../analysisExport'
+import QuizImage from '../components/QuizImage'
 
 const TODAY = new Date().toISOString().slice(0, 10)
 
@@ -63,8 +64,9 @@ function ReviewPlayer({ quizzes, sessionDate, onDone, addRecord }) {
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 20, minHeight: 140, display: 'flex', alignItems: 'center' }}>
+      <div className="card" style={{ marginBottom: 20, minHeight: 140, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12 }}>
         <p style={{ fontSize: 18, lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{current.question}</p>
+        <QuizImage image={current.questionImage} style={{ marginTop: 0 }} />
       </div>
 
       {!revealed ? (
@@ -74,6 +76,7 @@ function ReviewPlayer({ quizzes, sessionDate, onDone, addRecord }) {
           <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(110,231,183,0.3)', background: 'rgba(110,231,183,0.05)' }}>
             <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 8, fontWeight: 600 }}>정답</div>
             <p style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{current.answer}</p>
+            <QuizImage image={current.answerImage} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <button className="btn" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--danger)' }} onClick={() => handleAnswer(false)}>❌ 틀렸어</button>

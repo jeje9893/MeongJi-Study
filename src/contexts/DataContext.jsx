@@ -10,6 +10,7 @@ import {
   addRecordOffline, deleteRecordOffline, bulkDeleteRecordsOffline,
   exportOfflineData, importOfflineData,
 } from '../db'
+import { uploadQuizImage, deleteQuizImage, getQuizImage } from '../imageStorage'
 
 const DataContext = createContext(null)
 
@@ -44,6 +45,9 @@ export function DataProvider({ children }) {
         bulkDeleteRecords: ids => bulkDeleteRecords(user.uid, ids),
         exportData: () => exportFirestoreData(user.uid),
         importData: file => importFirestoreData(user.uid, file),
+        uploadImage: f => uploadQuizImage(user.uid, f),
+        deleteImage: id => deleteQuizImage(user.uid, id),
+        getImage: id => getQuizImage(user.uid, id),
       }
     : {
         addQuiz: d => addQuizOffline(d),
@@ -54,6 +58,9 @@ export function DataProvider({ children }) {
         bulkDeleteRecords: ids => bulkDeleteRecordsOffline(ids),
         exportData: () => exportOfflineData(),
         importData: file => importOfflineData(file),
+        uploadImage: null, // 이미지 업로드는 로그인 필요
+        deleteImage: null,
+        getImage: null,
       }
   , [user])
 

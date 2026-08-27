@@ -1,8 +1,9 @@
 import Dexie from 'dexie'
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, writeBatch, query, where
+  collection, doc, addDoc, updateDoc, deleteDoc, getDoc, getDocs, writeBatch, query, where
 } from 'firebase/firestore'
 import { firestoreDb } from './firebase'
+import { deleteQuizImage } from './imageStorage'
 
 // Dexie 인스턴스 (마이그레이션 마법사 전용 — 로컬 IndexedDB 읽기용)
 export const dexieDb = new Dexie('QuizDB')
@@ -52,6 +53,17 @@ dexieDb.version(5).stores({
   })
 })
 
+// 버전 6: questionImage / answerImage 추가 (인덱스 없음, 기본값 null 백필)
+dexieDb.version(6).stores({
+  quizzes: '++id, category, createdAt, excluded, lastReviewedAt',
+  records: '++id, quizId, date, isCorrect, reviewDate'
+}).upgrade(tx => {
+  return tx.table('quizzes').toCollection().modify(q => {
+    if (q.questionImage === undefined) q.questionImage = null
+    if (q.answerImage === undefined) q.answerImage = null
+  })
+})
+
 // ── Firestore CRUD 헬퍼 ──────────────────────────────────────────────────────
 
 function quizzesRef(uid) {
@@ -71,6 +83,8 @@ export async function addQuiz(uid, data) {
     createdAt: data.createdAt ?? Date.now(),
     lastReviewedAt: data.lastReviewedAt ?? null,
     answerHighlights: data.answerHighlights ?? [],
+    questionImage: data.questionImage ?? null,
+    answerImage: data.answerImage ?? null,
   })
 }
 
@@ -79,6 +93,15 @@ export async function updateQuiz(uid, quizId, data) {
 }
 
 export async function deleteQuiz(uid, quizId) {
+  // 문서 삭제 전에 연결된 이미지 문서 정리 (best-effort)
+  try {
+    const snap = await getDoc(doc(firestoreDb, `users/${uid}/quizzes`, quizId))
+    const d = snap.data()
+    if (d?.questionImage?.id) await deleteQuizImage(uid, d.questionImage.id)
+    if (d?.answerImage?.id) await deleteQuizImage(uid, d.answerImage.id)
+  } catch {
+    // ignore
+  }
   await deleteDoc(doc(firestoreDb, `users/${uid}/quizzes`, quizId))
   const q = query(recordsRef(uid), where('quizId', '==', quizId))
   const snap = await getDocs(q)
@@ -153,6 +176,8 @@ export async function importFirestoreData(uid, file) {
         createdAt: rest.createdAt ?? Date.now(),
         lastReviewedAt: rest.lastReviewedAt ?? null,
         answerHighlights: rest.answerHighlights ?? [],
+        questionImage: rest.questionImage ?? null,
+        answerImage: rest.answerImage ?? null,
       })
       idMap[oldId] = docRef.id
       existingSet.add(key)
@@ -194,6 +219,8 @@ export async function addQuizOffline(data) {
     createdAt: data.createdAt ?? Date.now(),
     lastReviewedAt: data.lastReviewedAt ?? null,
     answerHighlights: data.answerHighlights ?? [],
+    questionImage: data.questionImage ?? null,
+    answerImage: data.answerImage ?? null,
   })
   return { id: String(id) }
 }
@@ -271,6 +298,8 @@ export async function importOfflineData(file) {
         createdAt: rest.createdAt ?? Date.now(),
         lastReviewedAt: rest.lastReviewedAt ?? null,
         answerHighlights: rest.answerHighlights ?? [],
+        questionImage: rest.questionImage ?? null,
+        answerImage: rest.answerImage ?? null,
       })
       idMap[oldId] = String(newId)
       existingSet.add(key)

@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import { useData } from '../contexts/DataContext'
 import { renderWithHighlights, mergeHighlights, getSelectionOffsets } from '../highlightUtils.jsx'
 import QuizForm from '../components/QuizForm'
+import QuizImage from '../components/QuizImage'
+import { resolveQuizImage } from '../imageStorage'
 
 function getDateMonthAgo() {
   const d = new Date()
@@ -208,7 +210,9 @@ function QuizResult({ results, onRetry, onSetup }) {
             <span style={{ fontSize: 18 }}>{r.isCorrect ? '✅' : '❌'}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, marginBottom: 4, whiteSpace: 'pre-wrap' }}>{r.quiz.question}</div>
-              <div style={{ fontSize: 13, color: 'var(--text2)', whiteSpace: 'pre-wrap' }}>정답: {renderWithHighlights(r.quiz.answer, r.quiz.answerHighlights)}</div>
+              <QuizImage image={r.quiz.questionImage} style={{ maxHeight: 160, marginTop: 6 }} />
+              <div style={{ fontSize: 13, color: 'var(--text2)', whiteSpace: 'pre-wrap', marginTop: 6 }}>정답: {renderWithHighlights(r.quiz.answer, r.quiz.answerHighlights)}</div>
+              <QuizImage image={r.quiz.answerImage} style={{ maxHeight: 160, marginTop: 6 }} />
             </div>
           </div>
         ))}
@@ -221,7 +225,7 @@ export default function Quiz() {
   const [searchParams, setSearchParams] = useSearchParams()
   const isReviewMode = searchParams.get('mode') === 'review'
 
-  const { quizzes, records: allRecords, addRecord, deleteRecord, updateQuiz } = useData()
+  const { quizzes, records: allRecords, addRecord, deleteRecord, updateQuiz, uploadImage, deleteImage } = useData()
 
   const [phase, setPhase] = useState('setup')   // setup | playing | done
   const [sessionQuizzes, setSessionQuizzes] = useState([])
@@ -355,14 +359,18 @@ export default function Quiz() {
 
   async function handleEditSave(data) {
     const current = sessionQuizzes[idx]
+    const questionImage = await resolveQuizImage(data.questionImage, current.questionImage, uploadImage, deleteImage)
+    const answerImage = await resolveQuizImage(data.answerImage, current.answerImage, uploadImage, deleteImage)
     await updateQuiz(current.id, {
       question: data.question,
       answer: data.answer,
       category: data.category,
       answerHighlights: data.answerHighlights ?? [],
+      questionImage,
+      answerImage,
     })
     setSessionQuizzes(prev =>
-      prev.map(q => q.id === current.id ? { ...q, ...data } : q)
+      prev.map(q => q.id === current.id ? { ...q, ...data, questionImage, answerImage } : q)
     )
     setEditMode(false)
   }
@@ -409,8 +417,9 @@ export default function Quiz() {
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 20, minHeight: 140, display: 'flex', alignItems: 'center' }}>
+      <div className="card" style={{ marginBottom: 20, minHeight: 140, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 12 }}>
         <p style={{ fontSize: 18, lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap' }}>{current.question}</p>
+        <QuizImage image={current.questionImage} style={{ marginTop: 0 }} />
       </div>
 
       {!revealed ? (
@@ -434,6 +443,7 @@ export default function Quiz() {
           existingCategories={categories}
           onSave={handleEditSave}
           onCancel={() => setEditMode(false)}
+          uploadImage={uploadImage}
         />
       ) : !highlightMode ? (
         <div>
@@ -442,6 +452,7 @@ export default function Quiz() {
             <p style={{ fontSize: 17, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
               {renderWithHighlights(current.answer, current.answerHighlights)}
             </p>
+            <QuizImage image={current.answerImage} />
           </div>
           <button
             className="btn btn-secondary"
@@ -480,6 +491,7 @@ export default function Quiz() {
             >
               {renderWithHighlights(current.answer, quizHighlights)}
             </p>
+            <QuizImage image={current.answerImage} />
           </div>
           <button
             className="btn btn-secondary"
