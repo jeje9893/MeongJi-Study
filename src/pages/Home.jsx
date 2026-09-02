@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { compressFileToDataUrl } from '../imageUtils'
 import ImagePasteButton from '../components/ImagePaste'
+import { isControllerChanged } from '../swUpdate'
 import changelogEntries from '../changelog'
 
 const gitInfo = __GIT_INFO__
@@ -120,22 +121,31 @@ export default function Home() {
     if (updateState === 'checking') return
     setUpdateState('checking')
     try {
-      const reg = await navigator.serviceWorker.getRegistration()
-      if (!reg) { setUpdateState('idle'); return }
+      if (!('serviceWorker' in navigator)) { window.location.reload(); return }
+      // (a) 이미 새 SW가 제어권을 가져갔다면(페이지만 낡음) 바로 새로고침으로 적용
+      if (isControllerChanged()) { window.location.reload(); return }
 
-      let reloaded = false
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        reloaded = true
-        window.location.reload()
-      }, { once: true })
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (!reg) { window.location.reload(); return }
+
+      let willReload = false
+      const reload = () => { if (!willReload) { willReload = true; window.location.reload() } }
+      navigator.serviceWorker.addEventListener('controllerchange', reload, { once: true })
 
       await reg.update()
 
-      await new Promise(r => setTimeout(r, 2000))
-      if (!reloaded) {
-        setUpdateState('latest')
-        setTimeout(() => setUpdateState('idle'), 2500)
+      // (b) 새 워커가 잡혔으면 활성화 시 새로고침 (skipWaiting SW라 자동 활성화됨)
+      const nw = reg.installing || reg.waiting
+      if (nw) {
+        nw.addEventListener('statechange', () => { if (nw.state === 'activated') reload() })
+        setTimeout(reload, 8000) // 폴백: 이벤트 누락 대비 강제 적용
+        return // 스피너 유지, 곧 새로고침됨
       }
+
+      // (c) 새 워커 없음 = 진짜 최신
+      navigator.serviceWorker.removeEventListener('controllerchange', reload)
+      setUpdateState('latest')
+      setTimeout(() => setUpdateState('idle'), 2500)
     } catch {
       setUpdateState('idle')
     }
