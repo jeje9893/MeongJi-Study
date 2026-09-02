@@ -5,11 +5,11 @@ import { onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore'
 import { auth, firestoreDb } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
-import { compressFileToDataUrl, readImageFromClipboard } from '../imageUtils'
+import { compressFileToDataUrl } from '../imageUtils'
+import ImagePasteButton from '../components/ImagePaste'
 import changelogEntries from '../changelog'
 
 const gitInfo = __GIT_INFO__
-const canPasteImage = !!navigator.clipboard?.read
 
 function getStreak(records) {
   if (!records.length) return 0
@@ -114,16 +114,6 @@ export default function Home() {
     if (!file) return
     if (!file.type?.startsWith('image/')) { alert('이미지 파일만 넣을 수 있어요'); return }
     applyBannerImageBlob(file)
-  }
-
-  async function handlePasteBannerImage() {
-    try {
-      const blob = await readImageFromClipboard()
-      if (!blob) { alert('클립보드에 이미지가 없어요'); return }
-      applyBannerImageBlob(blob)
-    } catch (e) {
-      alert(e.message || '붙여넣기 실패')
-    }
   }
 
   async function handleCheckUpdate() {
@@ -323,13 +313,13 @@ export default function Home() {
                       <>
                         <img src={editImage} alt="" style={{ maxWidth: 96, maxHeight: 54, borderRadius: 6, objectFit: 'cover', background: 'rgba(0,0,0,0.3)' }} />
                         <button onClick={() => bannerImageInputRef.current?.click()} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }}>변경</button>
-                        {canPasteImage && <button onClick={handlePasteBannerImage} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }}>📋 붙여넣기</button>}
+                        <ImagePasteButton onImage={applyBannerImageBlob} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }} />
                         <button onClick={() => setEditImage(null)} style={swatchBtnStyle}>✕</button>
                       </>
                     ) : (
                       <>
                         <button onClick={() => bannerImageInputRef.current?.click()} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px' }}>🖼 추가</button>
-                        {canPasteImage && <button onClick={handlePasteBannerImage} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }}>📋 붙여넣기</button>}
+                        <ImagePasteButton onImage={applyBannerImageBlob} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }} />
                       </>
                     )}
                   </div>
