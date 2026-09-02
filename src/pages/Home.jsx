@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { compressFileToDataUrl } from '../imageUtils'
 import ImagePasteButton from '../components/ImagePaste'
+import QuizImage from '../components/QuizImage'
 import { isControllerChanged } from '../swUpdate'
 import changelogEntries from '../changelog'
 
@@ -352,10 +353,9 @@ export default function Home() {
                     </div>
                   )}
                   {bannerContent.image && (
-                    <img
-                      src={bannerContent.image}
-                      alt=""
-                      style={{ display: 'block', maxWidth: '100%', maxHeight: 220, borderRadius: 8, objectFit: 'contain', marginTop: bannerContent.text ? 8 : 0 }}
+                    <QuizImage
+                      image={{ dataUrl: bannerContent.image }}
+                      style={{ maxHeight: 220, marginTop: bannerContent.text ? 8 : 0 }}
                     />
                   )}
                 </>
