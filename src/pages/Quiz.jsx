@@ -357,6 +357,13 @@ export default function Quiz() {
     advanceQuiz()
   }
 
+  async function handleToggleExclude() {
+    const cur = sessionQuizzes[idx]
+    const next = !cur.excluded
+    await updateQuiz(cur.id, { excluded: next })
+    setSessionQuizzes(prev => prev.map(q => q.id === cur.id ? { ...q, excluded: next } : q))
+  }
+
   async function handleEditSave(data) {
     const current = sessionQuizzes[idx]
     const questionImage = await resolveQuizImage(data.questionImage, current.questionImage, uploadImage, deleteImage)
@@ -460,6 +467,17 @@ export default function Quiz() {
             onClick={() => setEditMode(true)}
           >
             ✏️ 문제 수정하기
+          </button>
+          <button
+            className="btn btn-secondary"
+            style={{
+              marginBottom: 12,
+              background: current.excluded ? 'rgba(110,231,183,0.12)' : 'rgba(251,191,36,0.12)',
+              color: current.excluded ? 'var(--accent)' : 'var(--warning)',
+            }}
+            onClick={handleToggleExclude}
+          >
+            {current.excluded ? '✓ 퀴즈에 포함' : '🚫 퀴즈에서 제외'}
           </button>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <button className="btn" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--danger)' }} onClick={() => handleAnswer(false)}>❌ 틀렸어</button>
