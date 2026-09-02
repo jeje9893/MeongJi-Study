@@ -1,11 +1,14 @@
 import { useState, useRef } from 'react'
 import { renderWithHighlights, mergeHighlights } from '../highlightUtils.jsx'
 import { useImageSrc } from '../useImageSrc'
+import { readImageFromClipboard } from '../imageUtils'
 
 const chipBtn = {
   padding: '3px 10px', borderRadius: 100, border: '1px solid rgba(255,255,255,0.12)',
   background: 'transparent', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
 }
+
+const canPaste = !!navigator.clipboard?.read
 
 // 이미지 필드 — value: null | {id}(기존) | {file}(새 선택). onChange로 상위에 전달.
 function ImageField({ value, onChange }) {
@@ -20,6 +23,16 @@ function ImageField({ value, onChange }) {
     onChange({ file })
   }
 
+  async function handlePaste() {
+    try {
+      const blob = await readImageFromClipboard()
+      if (!blob) { alert('클립보드에 이미지가 없어요'); return }
+      onChange({ file: blob })
+    } catch (e) {
+      alert(e.message || '붙여넣기 실패')
+    }
+  }
+
   return (
     <div style={{ marginTop: 8 }}>
       <input ref={inputRef} type="file" accept="image/*" onChange={handlePick} style={{ display: 'none' }} />
@@ -28,11 +41,15 @@ function ImageField({ value, onChange }) {
           <img src={previewUrl} alt="" style={{ maxWidth: 160, maxHeight: 160, borderRadius: 8, objectFit: 'contain', background: 'var(--bg3)' }} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button type="button" onClick={() => inputRef.current?.click()} style={chipBtn}>이미지 변경</button>
+            {canPaste && <button type="button" onClick={handlePaste} style={chipBtn}>📋 붙여넣기</button>}
             <button type="button" onClick={() => onChange(null)} style={chipBtn}>제거</button>
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => inputRef.current?.click()} style={chipBtn}>🖼 이미지 추가</button>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => inputRef.current?.click()} style={chipBtn}>🖼 이미지 추가</button>
+          {canPaste && <button type="button" onClick={handlePaste} style={chipBtn}>📋 붙여넣기</button>}
+        </div>
       )}
     </div>
   )

@@ -5,10 +5,11 @@ import { onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore'
 import { auth, firestoreDb } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
-import { compressFileToDataUrl } from '../imageUtils'
+import { compressFileToDataUrl, readImageFromClipboard } from '../imageUtils'
 import changelogEntries from '../changelog'
 
 const gitInfo = __GIT_INFO__
+const canPasteImage = !!navigator.clipboard?.read
 
 function getStreak(records) {
   if (!records.length) return 0
@@ -97,17 +98,31 @@ export default function Home() {
     setIsEditing(false)
   }
 
-  async function handlePickBannerImage(e) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (!file.type?.startsWith('image/')) { alert('이미지 파일만 넣을 수 있어요'); return }
+  async function applyBannerImageBlob(blob) {
     try {
-      const dataUrl = await compressFileToDataUrl(file, { maxDim: 900, quality: 0.75 })
+      const dataUrl = await compressFileToDataUrl(blob, { maxDim: 900, quality: 0.75 })
       if (dataUrl.length > 950000) { alert('이미지 용량이 너무 커요. 더 작은 이미지를 사용해주세요'); return }
       setEditImage(dataUrl)
     } catch (err) {
       alert('이미지 처리 실패: ' + err.message)
+    }
+  }
+
+  function handlePickBannerImage(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type?.startsWith('image/')) { alert('이미지 파일만 넣을 수 있어요'); return }
+    applyBannerImageBlob(file)
+  }
+
+  async function handlePasteBannerImage() {
+    try {
+      const blob = await readImageFromClipboard()
+      if (!blob) { alert('클립보드에 이미지가 없어요'); return }
+      applyBannerImageBlob(blob)
+    } catch (e) {
+      alert(e.message || '붙여넣기 실패')
     }
   }
 
@@ -308,10 +323,14 @@ export default function Home() {
                       <>
                         <img src={editImage} alt="" style={{ maxWidth: 96, maxHeight: 54, borderRadius: 6, objectFit: 'cover', background: 'rgba(0,0,0,0.3)' }} />
                         <button onClick={() => bannerImageInputRef.current?.click()} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }}>변경</button>
+                        {canPasteImage && <button onClick={handlePasteBannerImage} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }}>📋 붙여넣기</button>}
                         <button onClick={() => setEditImage(null)} style={swatchBtnStyle}>✕</button>
                       </>
                     ) : (
-                      <button onClick={() => bannerImageInputRef.current?.click()} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px' }}>🖼 추가</button>
+                      <>
+                        <button onClick={() => bannerImageInputRef.current?.click()} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px' }}>🖼 추가</button>
+                        {canPasteImage && <button onClick={handlePasteBannerImage} style={{ ...swatchBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }}>📋 붙여넣기</button>}
+                      </>
                     )}
                   </div>
                   <button

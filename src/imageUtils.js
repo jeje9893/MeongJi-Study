@@ -35,6 +35,17 @@ function canvasToBlob(canvas, type, quality) {
   return new Promise(resolve => canvas.toBlob(resolve, type, quality))
 }
 
+// 클립보드에서 이미지 Blob 읽기 (버튼 탭 등 사용자 제스처에서 호출)
+export async function readImageFromClipboard() {
+  if (!navigator.clipboard?.read) throw new Error('이 브라우저는 붙여넣기를 지원하지 않아요')
+  const items = await navigator.clipboard.read()
+  for (const item of items) {
+    const type = item.types.find(t => t.startsWith('image/'))
+    if (type) return await item.getType(type) // Blob
+  }
+  return null
+}
+
 // 파일을 압축해 data URL 문자열로 (배너 등 인라인 저장용)
 export async function compressFileToDataUrl(file, opts) {
   const blob = await compressImage(file, opts)
